@@ -1,0 +1,757 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="浅笑&#39;s blog">
+    <title>EFCore使用教程 - 浅笑&#39;s blog</title>
+    <meta name="author" content="浅笑">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"EntityFrameworkCore是微软官方推出的用于数据库链接与查询的ORM框架。使用ORM框架以面向对象的方式对数据库进行查询可以避免编写繁琐的原生SQL语句。EFCore通常有2种使用方式：DbFirst,CodeFirst。本文所有案例都只使用常用和灵活的方式–CodeFirst。\n\n\n一.在项目中引入EFCore\n使用CodeFirst方式可以将C#类映射到数据库从而自动生成相应的数据表.通常称这些类为实体类(Entity)\nCodeFirst方式使用EFCore首先使用Nuget在项目中安装EntityFrameworkCore.Tools,之后再根据所使用的数据库类型选择安装不同的Provider\n\n若是使用SqlServer数据库则再安装EntityFrameworkCore.SqlServer\n若是使用MySql数据库则再安装Pemelo.EntityFrameworkCore.MySql\n若是使用PostgreSql数据库则再安装Npgsql.EntityFrameworkCore.PostgreSQL\n\n不同的EFCoreProvider生成的sql语句会被对应的数据库类型所影响\n二.实体类\n使用EFCore的DbFirst方式构建数据库时，需要编写数据表对应的实体类. 通常会新建一个类库项目或目录，在其中统一编写实体类.\n这里列举一个学生与班级实体类的例子：\n123456789101112public class Student&#123;    public int Id &#123;get;set;&#125;    public string StuName &#123;get;set;&#125;  &#125;public class Class&#123;    public int Id &#123;get;set;&#125;    public string ClassName &#123;get;set;&#125;    public List&lt;Student&gt; Students &#123;get;set;&#125;&#125;\n\n将这两个实体类映射到数据库中后会生成两张数据表。可以看到Class类中包含一个List&lt;Student&gt;类型的属性Students，所以EFCore会自动把Class的Id作为Student表的外键并为Student生成外键ClassId，从而将这两个表关联起来。实际使用中一般显式地给Student类加上外键属性和导航属性，如下\n123456789101112131415public class Student&#123;    public int Id &#123;get;set;&#125;    public string StuName &#123;get;set;&#125;        public int ClassId&#123;get;set;&#125; //外键属性    public Class Class&#123;get;set;&#125; //导航属性&#125;public class Class&#123;    public int Id &#123;get;set;&#125;    public string ClassName &#123;get;set;&#125;    public List&lt;Student&gt; Students &#123;get;set;&#125;//导航属性&#125;\n\n导航属性以下例子中Student表中的属性Class和Class表中的Students属性均为导航属性。导航属性的意义在于可以在表的连接查询时直接使用.运算符从某个实体中获取与它有关联的实体\n比如Class class=context.Classes.Include(class=&gt;class.Students).Single(class=&gt;class.Id==1)其中Include中的class.Students就是通过Class的导航属性Students获取了所有该Class对应的Student集合\n12345678910111213public class Student&#123;    public int Id &#123;get;set;&#125;    public string StuName &#123;get;set;&#125;        public int ClassId&#123;get;set;&#125; //外键属性    public Class Class&#123;get;set;&#125; //导航属性&#125;public class Class&#123;    public int Id &#123;get;set;&#125;    public string ClassName &#123;get;set;&#125;    public List&lt;Student&gt; Students &#123;get;set;&#125;&#125;\n\n三.迁移到数据库\n1.创建并编写自定义的数据库上下文类继承DbContext类，并在上下文类中注册实体类\n123456789101112131415161718public class ApiDbContext:DbContext&#123;    public ApiDbContext(DbContextOptions&lt;ApiDbContext&gt; options):base(options)    &#123;    &#125;    //在OnConfiguring方法中配置DbContext(不必要)    //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)    //&#123;                //&#125;    //在这里注册实体类(必须)    //public virtual DbSet&lt;Students&gt; Student &#123; get; set; &#125;    //注册实体类Class，注意这里要使用virtual关键字，否则无法使用延迟查询,且属性名Class会成为数据库表名而不是传入的类型名Classes\tpublic virtual DbSet&lt;Classes&gt; Class &#123; get; set; &#125;&#125;\n\n2.在Program.cs中注册链接字符串\n123456789101112131415//使用sqlserver时builder.Services.AddDbContextPool&lt;ApiDbContext&gt;(options=&gt;    options.UseSqlServer(builder.Configuration.GetConnectionString(&quot;SqlServer&quot;)) );//使用mysql时builder.Services.AddDbContextPool&lt;ApiDbContext&gt;(options=&gt;    options.UseMySql(        \tbuilder.Configuration.GetConnectionString(&quot;MySql&quot;),       \t\tMySqlServerVersion.Parse(&quot;5.7&quot;)//Mysql版本为5.7    ));//注：//1.推荐使用builder.Configuration.GetConnectionString(key)获取appsettings.json中的数据库链接字符串(需在appsettings.json中添加)//2.使用AddSingleton方式注册自定义依赖注入时只能使用builder.Services.AddDbContext()而不能使用AddDbContextPool()\n\n3.打开nuget程序包管理控制台切换启动项目为主项目,迁移数据库\n12add-migration name\t//添加迁移(迁移名称name自定义)update-database\t//执行到数据库\n\n当add-migration执行成功之后，会在项目中生成一个migrations目录，里面记录有将要执行到数据库的代码，可以查看这些代码或修改（不推荐修改）. 之后再执行update-database即可执行到数据库\n如果之前的步骤没有出现问题，现在应该已经迁移成功,可以打开数据库管理软件查看生成的数据库和数据表了\n注意：若项目中有代码错误无法编译成功则无法迁移\n使用Migration可以对当前连接的数据库执行编号更高的迁移，这个操作叫”向上迁移”（Up），也可以把数据库回退到旧的迁移(“向下迁移Down”)\n12345add-migration xxx //添加一次迁移脚本remove-migration //删除最后一次的迁移脚本update-database xxx //执行迁移脚本把数据库更新到xxx迁移的状态(既可以向上更新也可以向下),若不加xxx则更新到最后一次迁移的状态    script-migration //生成迁移SQL代码\n\n2.DbFirstDbFirst可以用于已经存在数据库，需要生成对应的实体类的情况。但这种情况不常见，在这里不深入记载\n四.FluentApi\nFluentApi在迁移数据库时用于配置数据库的一些相关属性，与DataAnnotation对实体类的配置作用相似.但使用FluentApi配置实体类能降低耦合度\n使用方法，以书本类为例\n1.创建Config类继承IEntityTypeConfigration\n12345678910//1.创建BookConfig类继承IEntityTypeConfigration&lt;T&gt;,T为要映射到数据库的实体类class BookConfig:IEntityTypeConfigration&lt;Book&gt;&#123;    public void Configure(EntityTypeBuilder&lt;Book&gt; builder)    &#123;        builder.ToTable(&quot;T_Books&quot;);//设置表名        builder.Property(b=&gt;b.Title).HasMaxLength(50).IsRequierd();//设置Ttile字段长度为50，不能为空        builder.Property(b=&gt;b.AuthorName).HasMaxLength(20)IsRequierd();//设置AuthorName字段长度为20，不能为空    &#125;&#125;\n\n2.在上下文类中的OnModelCreating方法中注册\n123456//在上下文类中的OnModelCreating中添加protected override void OnModelCreating(ModelBuilder modelBuilder)&#123;    //加上这句话表示从所有实现了IEntityTypeConfigration&lt;T&gt;的配置类中加载配置    modelBuilder.ApplyConfigurationFromAssembly(this.GetType().Assembly);&#125;\n\n注意：若使用FluentApi配置实体类，则尽量不要使用FluentApi的一些高级特性，避免增加复杂度\n五. 实体关系配置\n数据库实体类通常存在三种对应关系,直接也可以采用FluentApi可以配置实体类之间的对应关系\n\n一对一\n以班长和班级为例，一个班级只能有一个班长，一个班长只能对应一个班级\n1234567891011121314public class Class&#123;    public int Id &#123;get;set;&#125;    public string ClassName &#123; get; set; &#125;    public Monitor Monitor &#123;get;set;&#125;&#125;public class Monitor&#123;    public int Id &#123;get;set;&#125;    public string Name &#123; get; set; &#125;    public int ClassId &#123; get; set; &#125;    public Class Class &#123;get;set;&#125;&#125;\n\n一对多\n以博客和评论为例，一篇博客可以有多个评论，一个评论只能对应一篇博客\n123456789101112131415//博客和评论的实体类public class Blog&#123;    public int Id &#123;get;set;&#125;    public string Content &#123; get; set; &#125;    public List&lt;Comment&gt; Comments &#123;get;set;&#125;&#125;public class Comment&#123;    public int Id &#123;get;set;&#125;    public string Content &#123; get; set; &#125;    public int BlogId &#123;get;set;&#125;    public Blog Blog &#123;get;set;&#125;&#125;\n\n编写以上实体类已经足够使用，也可使用如下FluentAp方法进行配置\n12345678910//评论配置类public class CommentConfig:IEntityTypeConfigration&lt;Comment&gt;&#123;    public void Configure(EntityTypeBuilder&lt;Comment&gt; builder)    &#123;        //配置评论表。IsRequired代表每个评论必须有对应的博客        builder.HasOne&lt;Blog&gt;(comment=&gt;comment.Blog).WithMany(blog=&gt;blog.Comments).IsRequired();        //以上配置执行到数据库后生成的Comment表会自动添加外键BlogId，关联Blog表的主键Id    &#125;&#125;\n\n进行关联对象的查询时，需要使用include()方法\n1Blog blog= context.Blogs.Include(b=&gt;b.Comments).Single(b=&gt;b.Id==1);//连接Blog表和Comment表，查询博客Id为1时的博客和其所有评论\n\n1Comment comment=context.Comments.Include(c=&gt;c.Blog).Single(c=&gt;c.Id==1);//连接Blog表和Comment表，查询评论Id为1时的评论和其对应博客信息\n\n多对多\n以博客和类型标签为例，一篇博客可以有多个类型标签，一个类型标签可也以包含多个博客\n123456789101112131415161718192021222324//博客和类型标签的实体类public class Blog&#123;    public int Id &#123;get;set;&#125;    public string Content &#123; get; set; &#125;    public List&lt;BlogToTag&gt; BlogToTags &#123;get;set;&#125;&#125;public class Tag&#123;    public int Id &#123;get;set;&#125;    public string TagName &#123; get; set; &#125;    public List&lt;BlogToTag&gt; BlogToTags &#123;get;set;&#125;&#125;//多对多中间modelpublic class BlogToTag&#123;    public int BlogId&#123;get;set;&#125;    public Blog Blog&#123;get;set;&#125;    public int TagId&#123;get;set;&#125;    public Tag Tag&#123;get;set;&#125;&#125;//查询时var result= context.Blogs.Include(blog =&gt; blog.BlogToTags).ThenInclude(blogToTag =&gt; blogToTag.BlogTag);\n\n编写以上实体类已经足够使用，也可使用如下FluentApi方法进行配置(需要去掉多对多中间model)\n12345678910//配置类public class TagConfig:IEntityTypeConfigration&lt;Tag&gt;&#123;    public void Configure(EntityTypeBuilder&lt;Tag&gt; builder)    &#123;        //配置评论表。IsRequired代表每个Tag必须有对应的博客        builder.HasMany&lt;Blog&gt;(Tag=&gt;Tag.Blogs).WithMany(blog=&gt;blog.Tags).IsRequired();        //以上配置执行到数据库后会自动生成一个存放Blog和Tag主键的关系表    &#125;&#125;\n\n自增型主键(int,long)与Guid类型主键的对比\n\n自增型主键：\n\n优点：由数据库自动生成，使用简单。查询时效率高\n缺点：高并发插入时性能低。合并数据库时可能会重复\n\n\nGuid\n\n优点：简单，高并发写入时效率高。永远不会重复\n缺点：占用空间大，查询时效率比int,long型主键效率低\n\n\n\n用Guid做主键时可以设置为索引，但不要设置为聚集索引，否则每次插入操作都要进行重排，导致插入效率极低\nMySql中主键强制使用聚集索引，所以不要在Mysql中使用Guid；SqlServer中主键可以设置为非聚集索引\n六.通过代码查看EFCore生成的SQL语句\n方法1：标准日志(正式部署时使用)\n在自定义数据库上下文类中加入如下代码，之后执行SQL查询时就会在控制台输出执行的SQL语句\n12345private static readonly ILoggerFactory loggerFactory = LoggerFactory.Create(b =&gt; b.AddConsole());protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)&#123;     optionsBuilder.UseLoggerFactory(loggerFactory);&#125;\n\n方法2：简单日志(开发时使用)\n在自定义数据库上下文类中加入如下代码，之后执行SQL查询时就会在控制台输出执行的SQL语句\n1234protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)&#123;     optionsBuilder.LogTo(msg =&gt; &#123; Console.WriteLine(msg); &#125;);&#125;\n\n方法3：使用IQueryable的扩展方法ToQueryString()\n12IQueryable&lt;T&gt; list;string sql=list.ToQueryString()//可以从一个IQueryable类型的变量中获取sql语句\n\n七.EFCore实体状态\n1.五种实体状态从DbContext中获取实体时，DbContext会将这些实体的状态保存一份快照；当实体更改后调用SaveChanges()保存这些更改到数据库时，会将这些更改后的实体与其更改前的快照进行比较，可以得出实体的5种状态：\n\nDetached\n若某实体与DbContext完全无关联，则它的实体状态为Detached，DbContext不会监管该种状态的实体\n\nUnchanged\n若实体由上下文跟踪并存在于数据库中，未经任何更改，则其状态为Unchanged\n\nAdded\n若实体是新创建的加入DbContext的实体需要添加进数据库，则其状态为Added\n\nModified\n若实体由上下文跟踪并存在于数据库且被更改过，则其状态为Modified\n\nDeleted\n若实体由上下文跟踪并存在于数据库且需要被移除，则其状态为Deleted\n\n\n在执行SaveChanges()时，EFCore会根据DbContext中这些实体的状态生成不同的SQL语句并执行，对于Added状态的实体生成insert；对于Modified状态的实体生成update；对于Deleted状态的实体生成delet\n2.AsNoTracking取消跟踪DbContext对实体进行跟踪需要花费额外的开销，有时候我们不需要跟踪实体状态以便提高查询效率，可以使用AsNoTracking()方法来实现无跟踪查询\n1context.Blog.AsNoTracking().Where(blog=&gt;blog.Id&gt;5)//查询Blog表中Id&gt;5的文章，不进行跟踪\n\n注意：对取消跟踪查询出来的实体进行修改后直接使用SaveChanges()无法将修改保存到数据库\n123456789var blog=context.Blog.Single(blog=&gt;blog.Id==1);blog.Title=&quot;修改后的标题1&quot;;//修改博客标题context.SaveChanges();//以上代码会将标题的修改保存到数据库，因为DbContext跟踪了blog的实体状态//---------------------------------------------------------------var blog=context.Blog.AsNoTracking().Single(blog=&gt;blog.Id==1);blog.Title=&quot;修改后的标题2&quot;;//修改博客标题context.SaveChanges();//以上代码无法将标题的修改保存到数据库，因为DbContext没有跟踪blog的实体状态\n\n若查询的数据不需要进行修改(只读)，则一定要使用AsNoTracking()。另外，推荐对所有实体的查询都默认使用AsNoTracking()，因为即使需要修改查询到的实体并保存到数据库，也可以不用跟踪实体，而是直接修改实体状态，之后再保存到数据库。但采用此方法保存的实体必须确认已经存在于数据库中。\n1234567891011121314151617var blog=context.Blog.AsNoTracking().Single(blog=&gt;blog.Id==1);blog.Title=&quot;修改后的标题2&quot;;//修改博客标题context.Entry(blog).State = EntityState.Modified;//将blog状态从detached修改为modified，//context.Entry(blog).State = EntityState.Deleted;//context.Entry(blog).State = EntityState.Added;//...context.SaveChanges();//删除Id为1的博客(方式1)var blog2=new Blog&#123;Id=1&#125;;context.Entry(blog2).State = EntityState.Deleted;//将blog状态从detached修改为deleted，context.SaveChanges();//删除Id为1的博客(方式2)var blog2=new Blog&#123;Id=1&#125;;context.Blog.Remove(blog2);context.SaveChanges();\n\n八.EFCore并发控制\n1.数据库悲观锁EFCore中没有封装数据库悲观锁的用法，不同数据库加悲观锁的语句也不同，所以需要使用ExcuteSqlInterpolated()\n方法执行原生的加锁SQL语句，以下例子以Mysql数据库为例。\n原理：select * from Blogs where Id=1 for update语句在Mysql数据库中会为博客Id为1的行加上悲观行锁，在该线程保存修改数据并释放锁前，其他线程试图访问该行时会等待。\n使用方法：\n123456789using(var context=new MyDbContext())using(var tr=context.DataBase.BeginTransaction())//开启数据库事务&#123;    var blog=context.Blog.ExecuteSqlInterpolated($&quot;select * from Blogs where Id=1 for update&quot;)//加锁查询Id为1的博客的sql语句\t\t\t.Single();    blog.Title=&quot;修改后的Title&quot;;    context.SaveChanges();    tr.Commit(); //提交事务&#125;\n\n悲观锁的优缺点：\n优点：使用简单\n缺点：锁是独占的，排他的，如果系统并发量大的话会严重影响性能，如果使用不当甚至会引发程序死锁。且不同数据库加锁的SQL语法也不同。EFCore没有提供使用悲观锁的方案。\n2.乐观锁原理：更改某一行的某个字段之前先select该字段的值，然后再执行update并在update语句最后加上and &lt;需要修改的字段名&gt;=&lt;先前查询到的字段值&gt;\n12select Title from Blog where Id=1 #查询Title的旧值update Blog set Title=&lt;新值&gt; where Id=1 and Title=&lt;更新前查询到的旧值&gt;\n\n当当前线程执行update前查询到的旧值被其他线程率先修改成功，当前update会因为旧值已被修改而无法满足and后的条件导致查询的影响条数为0，此时EFCore会得知发生并发冲突，抛出并发异常。作为条件判断的字段称为并发令牌。\n使用方法：\n只需要将进行并发控制的字段设置为并发令牌\n1234//使用FluentApi进行设置public void Configure(EntityTypeBuilder&lt;Blog&gt; builder)&#123;    builder.Property(b=&gt;b.Title).IsConcurrencyToken();//将Title字段设置为并发令牌&#125;\n\n1234567891011121314//使用时写法using(var context=new MyDbContext())&#123;    var blog=context.Blog.Single(b=&gt;b.Id==1);\tblog.Title=&quot;修改后的Title&quot;;\t    try&#123;        context.SaveChanges();    &#125;catch(DbUpdateConcurrencyException ex)&#123;        var entry=ex.Entries.First();        var dbValues=await entry.GetDatabaseValuesAsync();        string newTitle=dbValues.GetValue&lt;string&gt;(nameof(Blog.Title));        Console.WriteLine($&quot;并发冲突，字段已经被修改为&#123;newTitle&#125;&quot;);    &#125;&#125;\n\n乐观锁的优缺点：\n由于乐观锁在更新时不会加锁，而是先查询一下要修改的值是否已被修改，所以不会产生性能问题。且EFCore有对应的解决方案，所以推荐使用乐观锁。\n3.RowVersion行版本SqlServer支持在行中添加一个byte[]类型的字段RowVersion作为并发令牌帮助实现行的并发控制。当该行中某个或多个字段被修改时，SqlServer会自动改变RowVersion字段的值。\n若使用SqlServer数据库只需要在实体类中添加一行byte[]类型的属性，命名为RowVersion，然后在配置中设置该属性为并发令牌即可。\n123456public class Blog&#123;    public int Id&#123;get;set;&#125;    public string Title&#123;get;set;&#125;    public string Content&#123;get;set;&#125;    public byte[] RowVersion&#123;get;set;&#125;//作为并发令牌&#125;\n\n1234//使用FluentApi进行设置public void Configure(EntityTypeBuilder&lt;Blog&gt; builder)&#123;    builder.Property(b=&gt;b.RowVersion).IsRowVersion();//将RowVersion字段设置为并发令牌&#125;\n\n在Mysql中设置并发令牌可以通过给实体类添加一个DateTime或者Guid类型的属性作为并发令牌。每次更新该行时。对该并发令牌也进行更新。\n123456public class Blog&#123;    public int Id&#123;get;set;&#125;    public string Title&#123;get;set;&#125;    public string Content&#123;get;set;&#125;    public Guid RowVersion&#123;get;set;&#125;//作为并发令牌&#125;\n\n1234//使用FluentApi进行设置public void Configure(EntityTypeBuilder&lt;Blog&gt; builder)&#123;    builder.Property(b=&gt;b.RowVersion).IsConcurrencyToken();//将RowVersion字段设置为并发令牌&#125;\n\n123456789101112131415//使用时写法using(var context=new MyDbContext())&#123;    var blog=context.Blog.Single(b=&gt;b.Id==1);\tblog.Title=&quot;修改后的Title&quot;;\t    blog.RowVersion=Guid.NewGuid();//手动更新并发令牌    try&#123;        context.SaveChanges();    &#125;catch(DbUpdateConcurrencyException ex)&#123;        var entry=ex.Entries.First();        var dbValues=await entry.GetDatabaseValuesAsync();        string newVersion=dbValues.GetValue&lt;Guid&gt;(nameof(Blog.RowVersion));        Console.WriteLine($&quot;并发冲突，行版本已经被修改为&#123;newVersion&#125;&quot;);    &#125;&#125;\n\n4.并发控制总结\n乐观并发控制能够避免悲观锁带来的性能，死锁等问题，因此推荐使用乐观并发控制而不是悲观锁。\n如果有一个确定的字段要进行并发控制，那么使用IsConcurrencyToken将这个字段设置为并发令牌即可；\n如果无法确定一个唯一的并发令牌列，那么可以引入一个额外的字段设置为并发令牌，并且在每次更新数据的时候手动更新这个字段的值。如果用的是SqlServer数据库，那么可以采用RowVersion列，这样就不需要每次手动更新并发令牌了。\n\n","dateCreated":"2021-11-16T13:37:02+08:00","dateModified":"2022-11-24T16:08:43+08:00","datePublished":"2021-11-16T13:37:02+08:00","description":"EntityFrameworkCore是微软官方推出的用于数据库链接与查询的ORM框架。使用ORM框架以面向对象的方式对数据库进行查询可以避免编写繁琐的原生SQL语句。EFCore通常有2种使用方式：DbFirst,CodeFirst。本文所有案例都只使用常用和灵活的方式–CodeFirst。","headline":"EFCore使用教程","image":["https://s3.bmp.ovh/imgs/2022/11/17/351417abca9eadb4.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/","keywords":"EFCore","thumbnailUrl":"https://s3.bmp.ovh/imgs/2022/11/17/351417abca9eadb4.jpg"}</script>
+    <meta name="description" content="EntityFrameworkCore是微软官方推出的用于数据库链接与查询的ORM框架。使用ORM框架以面向对象的方式对数据库进行查询可以避免编写繁琐的原生SQL语句。EFCore通常有2种使用方式：DbFirst,CodeFirst。本文所有案例都只使用常用和灵活的方式–CodeFirst。">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="EFCore使用教程">
+<meta property="og:url" content="http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/index.html">
+<meta property="og:site_name" content="浅笑&#39;s blog">
+<meta property="og:description" content="EntityFrameworkCore是微软官方推出的用于数据库链接与查询的ORM框架。使用ORM框架以面向对象的方式对数据库进行查询可以避免编写繁琐的原生SQL语句。EFCore通常有2种使用方式：DbFirst,CodeFirst。本文所有案例都只使用常用和灵活的方式–CodeFirst。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-11-16T05:37:02.000Z">
+<meta property="article:modified_time" content="2022-11-24T08:08:43.490Z">
+<meta property="article:author" content="浅笑">
+<meta property="article:tag" content="EFCore">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:creator" content="@awawg">
+    
+        <link rel="publisher" href="https://plus.google.com/awgwag"/>
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
+    
+    
+        <meta property="og:image" content="https://s3.bmp.ovh/imgs/2022/11/17/351417abca9eadb4.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.bmp.ovh/imgs/2022/11/17/351417abca9eadb4.jpg"/>
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-jza15cykdfobov3m5dorp42elw9ecgjwnulxpcov0xrp6xyxle3civay6e3n.min.css">
+
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            浅笑&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">浅笑</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>代码爱好者</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/csysm"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            EFCore使用教程
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2021-11-16T13:37:02+08:00">
+	
+		    11月 16, 2021
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/EFCore/">EFCore</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p><a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/ef/core/">EntityFrameworkCore</a>是微软官方推出的用于数据库链接与查询的ORM框架。使用ORM框架以面向对象的方式对数据库进行查询可以避免编写繁琐的原生SQL语句。EFCore通常有2种使用方式：DbFirst,CodeFirst。本文所有案例都只使用常用和灵活的方式–CodeFirst。</p>
+<span id="more"></span>
+
+<h2 id="一-在项目中引入EFCore"><a href="#一-在项目中引入EFCore" class="headerlink" title="一.在项目中引入EFCore"></a>一.在项目中引入EFCore</h2><hr>
+<p>使用CodeFirst方式可以将C#类映射到数据库从而自动生成相应的数据表.通常称这些类为实体类(Entity)</p>
+<h3 id="CodeFirst方式使用EFCore"><a href="#CodeFirst方式使用EFCore" class="headerlink" title="CodeFirst方式使用EFCore"></a>CodeFirst方式使用EFCore</h3><p>首先使用Nuget在项目中安装EntityFrameworkCore.Tools,之后再根据所使用的数据库类型选择安装不同的Provider</p>
+<ul>
+<li>若是使用SqlServer数据库则再安装<code>EntityFrameworkCore.SqlServer</code></li>
+<li>若是使用MySql数据库则再安装<code>Pemelo.EntityFrameworkCore.MySql</code></li>
+<li>若是使用PostgreSql数据库则再安装<code>Npgsql.EntityFrameworkCore.PostgreSQL</code></li>
+</ul>
+<p>不同的EFCoreProvider生成的sql语句会被对应的数据库类型所影响</p>
+<h2 id="二-实体类"><a href="#二-实体类" class="headerlink" title="二.实体类"></a>二.实体类</h2><hr>
+<p>使用EFCore的DbFirst方式构建数据库时，需要编写数据表对应的<strong>实体类</strong>. 通常会新建一个类库项目或目录，在其中统一编写实体类.</p>
+<p>这里列举一个学生与班级实体类的例子：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Student</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> StuName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;  </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Class</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> ClassName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;Student&gt; Students &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>将这两个实体类映射到数据库中后会生成两张数据表。可以看到<code>Class</code>类中包含一个<code>List&lt;Student&gt;</code>类型的属性<code>Students</code>，所以EFCore会自动把<code>Class</code>的<code>Id</code>作为<code>Student</code>表的外键并为<code>Student</code>生成外键<code>ClassId</code>，从而将这两个表关联起来。<span class="highlight-text yellow">实际使用中一般显式地给Student类加上外键属性和导航属性</span>，如下</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Student</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> StuName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> ClassId&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125; <span class="comment">//外键属性</span></span><br><span class="line">    <span class="keyword">public</span> Class Class&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125; <span class="comment">//导航属性</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Class</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> ClassName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;Student&gt; Students &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;<span class="comment">//导航属性</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="导航属性"><a href="#导航属性" class="headerlink" title="导航属性"></a>导航属性</h3><p>以下例子中Student表中的属性<code>Class</code>和Class表中的<code>Students</code>属性均为导航属性。导航属性的意义在于可以在表的连接查询时直接使用<code>.</code>运算符从某个实体中获取与它有关联的实体</p>
+<p>比如<code>Class class=context.Classes.Include(class=&gt;class.Students).Single(class=&gt;class.Id==1)</code>其中Include中的<code>class.Students</code>就是通过Class的导航属性<code>Students</code>获取了所有该Class对应的Student集合</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Student</span>&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> StuName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> ClassId&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125; <span class="comment">//外键属性</span></span><br><span class="line">    <span class="keyword">public</span> Class Class&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125; <span class="comment">//导航属性</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Class</span>&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> ClassName &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;Student&gt; Students &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="三-迁移到数据库"><a href="#三-迁移到数据库" class="headerlink" title="三.迁移到数据库"></a>三.迁移到数据库</h2><hr>
+<p>1.创建并编写自定义的数据库上下文类继承DbContext类，并在上下文类中注册实体类</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">ApiDbContext</span>:<span class="title">DbContext</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ApiDbContext</span>(<span class="params">DbContextOptions&lt;ApiDbContext&gt; options</span>):<span class="title">base</span>(<span class="params">options</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//在OnConfiguring方法中配置DbContext(不必要)</span></span><br><span class="line">    <span class="comment">//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)</span></span><br><span class="line">    <span class="comment">//&#123;</span></span><br><span class="line">            </span><br><span class="line">    <span class="comment">//&#125;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">//在这里注册实体类(必须)</span></span><br><span class="line">    <span class="comment">//public virtual DbSet&lt;Students&gt; Student &#123; get; set; &#125;</span></span><br><span class="line">    <span class="comment">//注册实体类Class，注意这里要使用virtual关键字，否则无法使用延迟查询,且属性名Class会成为数据库表名而不是传入的类型名Classes</span></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">virtual</span> DbSet&lt;Classes&gt; Class &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>2.在Program.cs中注册链接字符串</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用sqlserver时</span></span><br><span class="line">builder.Services.AddDbContextPool&lt;ApiDbContext&gt;(options=&gt;</span><br><span class="line">    options.UseSqlServer(builder.Configuration.GetConnectionString(<span class="string">&quot;SqlServer&quot;</span>)) </span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment">//使用mysql时</span></span><br><span class="line">builder.Services.AddDbContextPool&lt;ApiDbContext&gt;(options=&gt;</span><br><span class="line">    options.UseMySql(</span><br><span class="line">        	builder.Configuration.GetConnectionString(<span class="string">&quot;MySql&quot;</span>),</span><br><span class="line">       		MySqlServerVersion.Parse(<span class="string">&quot;5.7&quot;</span>)<span class="comment">//Mysql版本为5.7</span></span><br><span class="line">    )</span><br><span class="line">);</span><br><span class="line"><span class="comment">//注：</span></span><br><span class="line"><span class="comment">//1.推荐使用builder.Configuration.GetConnectionString(key)获取appsettings.json中的数据库链接字符串(需在appsettings.json中添加)</span></span><br><span class="line"><span class="comment">//2.使用AddSingleton方式注册自定义依赖注入时只能使用builder.Services.AddDbContext()而不能使用AddDbContextPool()</span></span><br></pre></td></tr></table></figure>
+
+<p>3.打开nuget程序包管理控制台<strong>切换启动项目为主项目</strong>,迁移数据库</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add</span>-migration name	<span class="comment">//添加迁移(迁移名称name自定义)</span></span><br><span class="line">update-database	<span class="comment">//执行到数据库</span></span><br></pre></td></tr></table></figure>
+
+<p>当<code>add-migration</code>执行成功之后，会在项目中生成一个migrations目录，里面记录有将要执行到数据库的代码，可以查看这些代码或修改（不推荐修改）. 之后再执行<code>update-database</code>即可执行到数据库</p>
+<p>如果之前的步骤没有出现问题，现在应该已经迁移成功,可以打开数据库管理软件查看生成的数据库和数据表了</p>
+<p>注意：若项目中有代码错误无法编译成功则无法迁移</p>
+<p>使用Migration可以对当前连接的数据库执行编号更高的迁移，这个操作叫”向上迁移”（Up），也可以把数据库回退到旧的迁移(“向下迁移Down”)</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add</span>-migration xxx <span class="comment">//添加一次迁移脚本</span></span><br><span class="line"><span class="keyword">remove</span>-migration <span class="comment">//删除最后一次的迁移脚本</span></span><br><span class="line">update-database xxx <span class="comment">//执行迁移脚本把数据库更新到xxx迁移的状态(既可以向上更新也可以向下),若不加xxx则更新到最后一次迁移的状态</span></span><br><span class="line">    </span><br><span class="line">script-migration <span class="comment">//生成迁移SQL代码</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-DbFirst"><a href="#2-DbFirst" class="headerlink" title="2.DbFirst"></a>2.DbFirst</h3><p>DbFirst可以用于已经存在数据库，需要生成对应的实体类的情况。但这种情况不常见，在这里不深入记载</p>
+<h2 id="四-FluentApi"><a href="#四-FluentApi" class="headerlink" title="四.FluentApi"></a>四.FluentApi</h2><hr>
+<p>FluentApi在迁移数据库时用于配置数据库的一些相关属性，与DataAnnotation对实体类的配置作用相似.但使用FluentApi配置实体类能降低耦合度</p>
+<p>使用方法，以书本类为例</p>
+<p>1.创建Config类继承IEntityTypeConfigration<T></p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//1.创建BookConfig类继承IEntityTypeConfigration&lt;T&gt;,T为要映射到数据库的实体类</span></span><br><span class="line"><span class="keyword">class</span> <span class="title">BookConfig</span>:<span class="title">IEntityTypeConfigration</span>&lt;<span class="title">Book</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Book&gt; builder</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        builder.ToTable(<span class="string">&quot;T_Books&quot;</span>);<span class="comment">//设置表名</span></span><br><span class="line">        builder.Property(b=&gt;b.Title).HasMaxLength(<span class="number">50</span>).IsRequierd();<span class="comment">//设置Ttile字段长度为50，不能为空</span></span><br><span class="line">        builder.Property(b=&gt;b.AuthorName).HasMaxLength(<span class="number">20</span>)IsRequierd();<span class="comment">//设置AuthorName字段长度为20，不能为空</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>2.在上下文类中的OnModelCreating方法中注册</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//在上下文类中的OnModelCreating中添加</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">override</span> <span class="keyword">void</span> <span class="title">OnModelCreating</span>(<span class="params">ModelBuilder modelBuilder</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//加上这句话表示从所有实现了IEntityTypeConfigration&lt;T&gt;的配置类中加载配置</span></span><br><span class="line">    modelBuilder.ApplyConfigurationFromAssembly(<span class="keyword">this</span>.GetType().Assembly);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意：若使用FluentApi配置实体类，则尽量不要使用FluentApi的一些高级特性，避免增加复杂度</p>
+<h2 id="五-实体关系配置"><a href="#五-实体关系配置" class="headerlink" title="五. 实体关系配置"></a>五. 实体关系配置</h2><hr>
+<p>数据库实体类通常存在三种对应关系,直接也可以采用FluentApi可以配置实体类之间的对应关系</p>
+<ol>
+<li><p>一对一</p>
+<p>以班长和班级为例，一个班级只能有一个班长，一个班长只能对应一个班级</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Class</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> ClassName &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> Monitor Monitor &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Monitor</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Name &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> ClassId &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> Class Class &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>一对多</p>
+<p>以博客和评论为例，一篇博客可以有多个评论，一个评论只能对应一篇博客</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//博客和评论的实体类</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Blog</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Content &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;Comment&gt; Comments &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Comment</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Content &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> BlogId &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> Blog Blog &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编写以上实体类已经足够使用，也可使用如下FluentAp方法进行配置</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//评论配置类</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">CommentConfig</span>:<span class="title">IEntityTypeConfigration</span>&lt;<span class="title">Comment</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Comment&gt; builder</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">//配置评论表。IsRequired代表每个评论必须有对应的博客</span></span><br><span class="line">        builder.HasOne&lt;Blog&gt;(comment=&gt;comment.Blog).WithMany(blog=&gt;blog.Comments).IsRequired();</span><br><span class="line">        <span class="comment">//以上配置执行到数据库后生成的Comment表会自动添加外键BlogId，关联Blog表的主键Id</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>进行关联对象的查询时，需要使用include()方法</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Blog blog= context.Blogs.Include(b=&gt;b.Comments).Single(b=&gt;b.Id==<span class="number">1</span>);<span class="comment">//连接Blog表和Comment表，查询博客Id为1时的博客和其所有评论</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Comment comment=context.Comments.Include(c=&gt;c.Blog).Single(c=&gt;c.Id==<span class="number">1</span>);<span class="comment">//连接Blog表和Comment表，查询评论Id为1时的评论和其对应博客信息</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>多对多</p>
+<p>以博客和类型标签为例，一篇博客可以有多个类型标签，一个类型标签可也以包含多个博客</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//博客和类型标签的实体类</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Blog</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Content &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;BlogToTag&gt; BlogToTags &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Tag</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> TagName &#123; <span class="keyword">get</span>; <span class="keyword">set</span>; &#125;</span><br><span class="line">    <span class="keyword">public</span> List&lt;BlogToTag&gt; BlogToTags &#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//多对多中间model</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">BlogToTag</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> BlogId&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> Blog Blog&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> TagId&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> Tag Tag&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//查询时</span></span><br><span class="line"><span class="keyword">var</span> result= context.Blogs.Include(blog =&gt; blog.BlogToTags).ThenInclude(blogToTag =&gt; blogToTag.BlogTag);</span><br></pre></td></tr></table></figure>
+
+<p>编写以上实体类已经足够使用，也可使用如下FluentApi方法进行配置(需要去掉多对多中间model)</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//配置类</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">TagConfig</span>:<span class="title">IEntityTypeConfigration</span>&lt;<span class="title">Tag</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Tag&gt; builder</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">//配置评论表。IsRequired代表每个Tag必须有对应的博客</span></span><br><span class="line">        builder.HasMany&lt;Blog&gt;(Tag=&gt;Tag.Blogs).WithMany(blog=&gt;blog.Tags).IsRequired();</span><br><span class="line">        <span class="comment">//以上配置执行到数据库后会自动生成一个存放Blog和Tag主键的关系表</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p>自增型主键(int,long)与Guid类型主键的对比</p>
+<ol>
+<li><p>自增型主键：</p>
+<blockquote>
+<p>优点：由数据库自动生成，使用简单。查询时效率高</p>
+<p>缺点：高并发插入时性能低。合并数据库时可能会重复</p>
+</blockquote>
+</li>
+<li><p>Guid</p>
+<blockquote>
+<p>优点：简单，高并发写入时效率高。永远不会重复</p>
+<p>缺点：占用空间大，查询时效率比int,long型主键效率低</p>
+</blockquote>
+</li>
+</ol>
+<p>用Guid做主键时可以设置为索引，但不要设置为聚集索引，否则每次插入操作都要进行重排，导致插入效率极低</p>
+<p>MySql中主键强制使用聚集索引，所以不要在Mysql中使用Guid；SqlServer中主键可以设置为非聚集索引</p>
+<h2 id="六-通过代码查看EFCore生成的SQL语句"><a href="#六-通过代码查看EFCore生成的SQL语句" class="headerlink" title="六.通过代码查看EFCore生成的SQL语句"></a>六.通过代码查看EFCore生成的SQL语句</h2><hr>
+<p>方法1：标准日志(正式部署时使用)</p>
+<p>在自定义数据库上下文类中加入如下代码，之后执行SQL查询时就会在控制台输出执行的SQL语句</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">readonly</span> ILoggerFactory loggerFactory = LoggerFactory.Create(b =&gt; b.AddConsole());</span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">override</span> <span class="keyword">void</span> <span class="title">OnConfiguring</span>(<span class="params">DbContextOptionsBuilder optionsBuilder</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">     optionsBuilder.UseLoggerFactory(loggerFactory);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>方法2：简单日志(开发时使用)</p>
+<p>在自定义数据库上下文类中加入如下代码，之后执行SQL查询时就会在控制台输出执行的SQL语句</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">override</span> <span class="keyword">void</span> <span class="title">OnConfiguring</span>(<span class="params">DbContextOptionsBuilder optionsBuilder</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">     optionsBuilder.LogTo(msg =&gt; &#123; Console.WriteLine(msg); &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>方法3：使用IQueryable的扩展方法ToQueryString()</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">IQueryable&lt;T&gt; <span class="built_in">list</span>;</span><br><span class="line"><span class="built_in">string</span> sql=<span class="built_in">list</span>.ToQueryString()<span class="comment">//可以从一个IQueryable类型的变量中获取sql语句</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="七-EFCore实体状态"><a href="#七-EFCore实体状态" class="headerlink" title="七.EFCore实体状态"></a>七.EFCore实体状态</h2><hr>
+<h3 id="1-五种实体状态"><a href="#1-五种实体状态" class="headerlink" title="1.五种实体状态"></a>1.五种实体状态</h3><p>从DbContext中获取实体时，DbContext会将这些实体的状态保存一份快照；当实体更改后调用SaveChanges()保存这些更改到数据库时，会将这些更改后的实体与其更改前的快照进行比较，可以得出实体的5种状态：</p>
+<ol>
+<li><p>Detached</p>
+<p>若某实体与DbContext完全无关联，则它的实体状态为Detached，DbContext不会监管该种状态的实体</p>
+</li>
+<li><p>Unchanged</p>
+<p>若实体由上下文跟踪并存在于数据库中，未经任何更改，则其状态为Unchanged</p>
+</li>
+<li><p>Added</p>
+<p>若实体是新创建的加入DbContext的实体需要添加进数据库，则其状态为Added</p>
+</li>
+<li><p>Modified</p>
+<p>若实体由上下文跟踪并存在于数据库且被更改过，则其状态为Modified</p>
+</li>
+<li><p>Deleted</p>
+<p>若实体由上下文跟踪并存在于数据库且需要被移除，则其状态为Deleted</p>
+</li>
+</ol>
+<p>在执行SaveChanges()时，EFCore会根据DbContext中这些实体的状态生成不同的SQL语句并执行，对于Added状态的实体生成insert；对于Modified状态的实体生成update；对于Deleted状态的实体生成delet</p>
+<h3 id="2-AsNoTracking取消跟踪"><a href="#2-AsNoTracking取消跟踪" class="headerlink" title="2.AsNoTracking取消跟踪"></a>2.AsNoTracking取消跟踪</h3><p>DbContext对实体进行跟踪需要花费额外的开销，有时候我们不需要跟踪实体状态以便提高查询效率，可以使用AsNoTracking()方法来实现无跟踪查询</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">context.Blog.AsNoTracking().Where(blog=&gt;blog.Id&gt;<span class="number">5</span>)<span class="comment">//查询Blog表中Id&gt;5的文章，不进行跟踪</span></span><br></pre></td></tr></table></figure>
+
+<p>注意：对取消跟踪查询出来的实体进行修改后直接使用SaveChanges()无法将修改保存到数据库</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> blog=context.Blog.Single(blog=&gt;blog.Id==<span class="number">1</span>);</span><br><span class="line">blog.Title=<span class="string">&quot;修改后的标题1&quot;</span>;<span class="comment">//修改博客标题</span></span><br><span class="line">context.SaveChanges();</span><br><span class="line"><span class="comment">//以上代码会将标题的修改保存到数据库，因为DbContext跟踪了blog的实体状态</span></span><br><span class="line"><span class="comment">//---------------------------------------------------------------</span></span><br><span class="line"><span class="keyword">var</span> blog=context.Blog.AsNoTracking().Single(blog=&gt;blog.Id==<span class="number">1</span>);</span><br><span class="line">blog.Title=<span class="string">&quot;修改后的标题2&quot;</span>;<span class="comment">//修改博客标题</span></span><br><span class="line">context.SaveChanges();</span><br><span class="line"><span class="comment">//以上代码无法将标题的修改保存到数据库，因为DbContext没有跟踪blog的实体状态</span></span><br></pre></td></tr></table></figure>
+
+<p>若查询的数据不需要进行修改(只读)，则一定要使用AsNoTracking()。另外，推荐对所有实体的查询都默认使用AsNoTracking()，因为即使需要修改查询到的实体并保存到数据库，也可以不用跟踪实体，而是直接修改实体状态，之后再保存到数据库。但采用此方法保存的实体必须确认已经存在于数据库中。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> blog=context.Blog.AsNoTracking().Single(blog=&gt;blog.Id==<span class="number">1</span>);</span><br><span class="line">blog.Title=<span class="string">&quot;修改后的标题2&quot;</span>;<span class="comment">//修改博客标题</span></span><br><span class="line">context.Entry(blog).State = EntityState.Modified;<span class="comment">//将blog状态从detached修改为modified，</span></span><br><span class="line"><span class="comment">//context.Entry(blog).State = EntityState.Deleted;</span></span><br><span class="line"><span class="comment">//context.Entry(blog).State = EntityState.Added;</span></span><br><span class="line"><span class="comment">//...</span></span><br><span class="line">context.SaveChanges();</span><br><span class="line"></span><br><span class="line"><span class="comment">//删除Id为1的博客(方式1)</span></span><br><span class="line"><span class="keyword">var</span> blog2=<span class="keyword">new</span> Blog&#123;Id=<span class="number">1</span>&#125;;</span><br><span class="line">context.Entry(blog2).State = EntityState.Deleted;<span class="comment">//将blog状态从detached修改为deleted，</span></span><br><span class="line">context.SaveChanges();</span><br><span class="line"></span><br><span class="line"><span class="comment">//删除Id为1的博客(方式2)</span></span><br><span class="line"><span class="keyword">var</span> blog2=<span class="keyword">new</span> Blog&#123;Id=<span class="number">1</span>&#125;;</span><br><span class="line">context.Blog.Remove(blog2);</span><br><span class="line">context.SaveChanges();</span><br></pre></td></tr></table></figure>
+
+<h2 id="八-EFCore并发控制"><a href="#八-EFCore并发控制" class="headerlink" title="八.EFCore并发控制"></a>八.EFCore并发控制</h2><hr>
+<h3 id="1-数据库悲观锁"><a href="#1-数据库悲观锁" class="headerlink" title="1.数据库悲观锁"></a>1.数据库悲观锁</h3><p>EFCore中没有封装数据库悲观锁的用法，不同数据库加悲观锁的语句也不同，所以需要使用ExcuteSqlInterpolated()</p>
+<p>方法执行原生的加锁SQL语句，以下例子以Mysql数据库为例。</p>
+<p>原理：<code>select * from Blogs where Id=1 for update</code>语句在Mysql数据库中会为博客Id为1的行加上悲观行锁，在该线程保存修改数据并释放锁前，其他线程试图访问该行时会等待。</p>
+<p>使用方法：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span>(<span class="keyword">var</span> context=<span class="keyword">new</span> MyDbContext())</span><br><span class="line"><span class="keyword">using</span>(<span class="keyword">var</span> tr=context.DataBase.BeginTransaction())<span class="comment">//开启数据库事务</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">var</span> blog=context.Blog.ExecuteSqlInterpolated(<span class="string">$&quot;select * from Blogs where Id=1 for update&quot;</span>)<span class="comment">//加锁查询Id为1的博客的sql语句</span></span><br><span class="line">			.Single();</span><br><span class="line">    blog.Title=<span class="string">&quot;修改后的Title&quot;</span>;</span><br><span class="line">    context.SaveChanges();</span><br><span class="line">    tr.Commit(); <span class="comment">//提交事务</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>悲观锁的优缺点：</p>
+<p>优点：使用简单</p>
+<p>缺点：锁是独占的，排他的，如果系统并发量大的话会严重影响性能，如果使用不当甚至会引发程序死锁。且不同数据库加锁的SQL语法也不同。EFCore没有提供使用悲观锁的方案。</p>
+<h3 id="2-乐观锁"><a href="#2-乐观锁" class="headerlink" title="2.乐观锁"></a>2.乐观锁</h3><p>原理：更改某一行的某个字段之前先select该字段的值，然后再执行update并在update语句最后加上<code>and &lt;需要修改的字段名&gt;=&lt;先前查询到的字段值&gt;</code></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> Title <span class="keyword">from</span> Blog <span class="keyword">where</span> Id<span class="operator">=</span><span class="number">1</span> #查询Title的旧值</span><br><span class="line"><span class="keyword">update</span> Blog <span class="keyword">set</span> Title<span class="operator">=</span><span class="operator">&lt;</span>新值<span class="operator">&gt;</span> <span class="keyword">where</span> Id<span class="operator">=</span><span class="number">1</span> <span class="keyword">and</span> Title<span class="operator">=</span><span class="operator">&lt;</span>更新前查询到的旧值<span class="operator">&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>当当前线程执行update前查询到的旧值被其他线程率先修改成功，当前update会因为旧值已被修改而无法满足and后的条件导致查询的影响条数为0，此时EFCore会得知发生并发冲突，抛出并发异常。作为条件判断的字段称为<span class="highlight-text yellow">并发令牌</span>。</p>
+<p>使用方法：</p>
+<p>只需要将进行并发控制的字段设置为并发令牌</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用FluentApi进行设置</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Blog&gt; builder</span>)</span>&#123;</span><br><span class="line">    builder.Property(b=&gt;b.Title).IsConcurrencyToken();<span class="comment">//将Title字段设置为并发令牌</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用时写法</span></span><br><span class="line"><span class="keyword">using</span>(<span class="keyword">var</span> context=<span class="keyword">new</span> MyDbContext())</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">var</span> blog=context.Blog.Single(b=&gt;b.Id==<span class="number">1</span>);</span><br><span class="line">	blog.Title=<span class="string">&quot;修改后的Title&quot;</span>;	</span><br><span class="line">    <span class="keyword">try</span>&#123;</span><br><span class="line">        context.SaveChanges();</span><br><span class="line">    &#125;<span class="keyword">catch</span>(DbUpdateConcurrencyException ex)&#123;</span><br><span class="line">        <span class="keyword">var</span> entry=ex.Entries.First();</span><br><span class="line">        <span class="keyword">var</span> dbValues=<span class="keyword">await</span> entry.GetDatabaseValuesAsync();</span><br><span class="line">        <span class="built_in">string</span> newTitle=dbValues.GetValue&lt;<span class="built_in">string</span>&gt;(<span class="keyword">nameof</span>(Blog.Title));</span><br><span class="line">        Console.WriteLine(<span class="string">$&quot;并发冲突，字段已经被修改为<span class="subst">&#123;newTitle&#125;</span>&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>乐观锁的优缺点：</p>
+<p>由于乐观锁在更新时不会加锁，而是先查询一下要修改的值是否已被修改，所以不会产生性能问题。且EFCore有对应的解决方案，所以推荐使用乐观锁。</p>
+<h3 id="3-RowVersion行版本"><a href="#3-RowVersion行版本" class="headerlink" title="3.RowVersion行版本"></a>3.RowVersion行版本</h3><p>SqlServer支持在行中添加一个byte[]类型的字段RowVersion作为并发令牌帮助实现行的并发控制。当该行中某个或多个字段被修改时，SqlServer会自动改变RowVersion字段的值。</p>
+<p>若使用SqlServer数据库只需要在实体类中添加一行byte[]类型的属性，命名为RowVersion，然后在配置中设置该属性为并发令牌即可。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Blog</span>&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Title&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Content&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">byte</span>[] RowVersion&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;<span class="comment">//作为并发令牌</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用FluentApi进行设置</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Blog&gt; builder</span>)</span>&#123;</span><br><span class="line">    builder.Property(b=&gt;b.RowVersion).IsRowVersion();<span class="comment">//将RowVersion字段设置为并发令牌</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在Mysql中设置并发令牌可以通过给实体类添加一个DateTime或者Guid类型的属性作为并发令牌。每次更新该行时。对该并发令牌也进行更新。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Blog</span>&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">int</span> Id&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Title&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> <span class="built_in">string</span> Content&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;</span><br><span class="line">    <span class="keyword">public</span> Guid RowVersion&#123;<span class="keyword">get</span>;<span class="keyword">set</span>;&#125;<span class="comment">//作为并发令牌</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用FluentApi进行设置</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Configure</span>(<span class="params">EntityTypeBuilder&lt;Blog&gt; builder</span>)</span>&#123;</span><br><span class="line">    builder.Property(b=&gt;b.RowVersion).IsConcurrencyToken();<span class="comment">//将RowVersion字段设置为并发令牌</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//使用时写法</span></span><br><span class="line"><span class="keyword">using</span>(<span class="keyword">var</span> context=<span class="keyword">new</span> MyDbContext())</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">var</span> blog=context.Blog.Single(b=&gt;b.Id==<span class="number">1</span>);</span><br><span class="line">	blog.Title=<span class="string">&quot;修改后的Title&quot;</span>;	</span><br><span class="line">    blog.RowVersion=Guid.NewGuid();<span class="comment">//手动更新并发令牌</span></span><br><span class="line">    <span class="keyword">try</span>&#123;</span><br><span class="line">        context.SaveChanges();</span><br><span class="line">    &#125;<span class="keyword">catch</span>(DbUpdateConcurrencyException ex)&#123;</span><br><span class="line">        <span class="keyword">var</span> entry=ex.Entries.First();</span><br><span class="line">        <span class="keyword">var</span> dbValues=<span class="keyword">await</span> entry.GetDatabaseValuesAsync();</span><br><span class="line">        <span class="built_in">string</span> newVersion=dbValues.GetValue&lt;Guid&gt;(<span class="keyword">nameof</span>(Blog.RowVersion));</span><br><span class="line">        Console.WriteLine(<span class="string">$&quot;并发冲突，行版本已经被修改为<span class="subst">&#123;newVersion&#125;</span>&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-并发控制总结"><a href="#4-并发控制总结" class="headerlink" title="4.并发控制总结"></a>4.并发控制总结</h3><ol>
+<li>乐观并发控制能够避免悲观锁带来的性能，死锁等问题，<strong>因此推荐使用乐观并发控制而不是悲观锁</strong>。</li>
+<li>如果有一个确定的字段要进行并发控制，那么使用IsConcurrencyToken将这个字段设置为并发令牌即可；</li>
+<li>如果无法确定一个唯一的并发令牌列，那么可以引入一个额外的字段设置为并发令牌，并且在每次更新数据的时候手动更新这个字段的值。如果用的是SqlServer数据库，那么可以采用RowVersion列，这样就不需要每次手动更新并发令牌了。</li>
+</ol>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/EFCore/" rel="tag">EFCore</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    data-tooltip="EFCore性能优化"
+                    aria-label="上一篇: EFCore性能优化"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    data-tooltip="C#集合"
+                    aria-label="下一篇: C#集合"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/&amp;title=EFCore使用教程"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2022 浅笑. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    data-tooltip="EFCore性能优化"
+                    aria-label="上一篇: EFCore性能优化"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    data-tooltip="C#集合"
+                    aria-label="下一篇: C#集合"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/&amp;title=EFCore使用教程"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                        aria-label="分享到 Weibo"
+                    >
+                        <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/&amp;title=EFCore使用教程"
+                        aria-label="分享到 QQ"
+                    >
+                        <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">浅笑</h4>
+        
+            <div id="about-card-bio"><p>代码爱好者</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                Wuhan
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/background.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-r1cy8sodc70sqdustknxebxnaszsgd8lhjzdxnsc5syn7siu0apth4cih47e.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

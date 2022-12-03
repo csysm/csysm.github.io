@@ -1,0 +1,596 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="浅笑&#39;s blog">
+    <title>C#集合 - 浅笑&#39;s blog</title>
+    <meta name="author" content="浅笑">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"看一看System.Collections中常用的容器源码.\n\n\ngithub源码\n有泛型实现时只看泛型实现。\n1.List属性：\n1234567891011121314151617181920212223242526272829303132333435363738394041424344// Implements a variable-size List that uses an array of objects to store the// elements. A List has a capacity, which is the allocated length// of the internal array. As elements are added to a List, the capacity// of the List is automatically increased as required by reallocating the// internal array.private const int DefaultCapacity = 4; //默认容量private T[] _items; //泛型数组private int _size; //元素个数private int _version; //版本?private static readonly T[] s_emptyArray = new T[0]; //空数组，当List中没有元素时使用public int Capacity //数组容量(只在变化时使用set访问器重新分配空间)        &#123;            get//获取            &#123;                return _items.Length;//返回当前数组的长度            &#125;            set//设置            &#123;                if (value &lt; _size)//如果传入值&lt;当前数组中的元素个数,抛出异常                &#123;                    ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.value, ExceptionResource.ArgumentOutOfRange_SmallCapacity);                &#125;                if (value != _items.Length)//如果传入值!=当前数组的长度                &#123;                    if (value &gt; 0)//如果传入值&gt;0                    &#123;                        T[] newItems = new T[value];//构造一个长度为value的新数组                        if (_size &gt; 0)//如果当前数组中存在元素                        &#123;                            Array.Copy(_items, 0, newItems, 0, _size);//将元素复制到新数组中                        &#125;                        _items = newItems;//用新数组替换旧数组                    &#125;                    else//如果传入值==0                    &#123;                        _items = s_emptyArray;//用空数组替换旧数组                    &#125;                &#125;            &#125;        &#125;\n\n构造方法：\n1234567891011121314151617181920212223242526272829303132333435363738394041424344454647public List()//未指定List长度时使用s_emptyArray&#123;    _items = s_emptyArray;&#125;public List(int capacity)//指定List长度时&#123;    if (capacity &lt; 0)        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.capacity, ExceptionResource.ArgumentOutOfRange_NeedNonNegNum);    if (capacity == 0)        _items = s_emptyArray;    else        _items = new T[capacity];&#125;public List(IEnumerable&lt;T&gt; collection)//使用其他实现了IEnumerable&lt;T&gt;的集合构建List时&#123;    if (collection == null)//如果集合为空，抛异常        ThrowHelper.ThrowArgumentNullException(ExceptionArgument.collection);    if (collection is ICollection&lt;T&gt; c)//如果该集合实现了ICollection&lt;T&gt;    &#123;        int count = c.Count;        if (count == 0) //collection中元素个数为0时        &#123;            _items = s_emptyArray;        &#125;        else //collection中元素个数不为0时        &#123;            _items = new T[count]; //_items=创建的新数组，数组长度为collection中元素个数            c.CopyTo(_items, 0); //将collection中元素拷贝到_items            _size = count;//设置当前元素个数为collection中元素个数        &#125;    &#125;    else//如果该集合没有实现ICollection&lt;T&gt;    &#123;        _size = 0;        _items = s_emptyArray;        using (IEnumerator&lt;T&gt; en = collection!.GetEnumerator())//遍历该集合并依次使用Add方法添加        &#123;            while (en.MoveNext())            &#123;                Add(en.Current);            &#125;        &#125;    &#125;&#125;\n\n方法：\n12345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394//计数public int Count =&gt; _size; //返回元素个数_size//单个添加[MethodImpl(MethodImplOptions.AggressiveInlining)]public void Add(T item)&#123;    _version++;    T[] array = _items;    int size = _size;    if ((uint)size &lt; (uint)array.Length)//若当前元素个数小于数组长度    &#123;        _size = size + 1;//当前元素个数+1        array[size] = item;//将元素加入array[size]，这里size不是_size    &#125;    else    &#123;        AddWithResize(item);//若当前元素个数等于数组长度，扩容后添加    &#125;&#125;//AddWithResize()[MethodImpl(MethodImplOptions.NoInlining)]private void AddWithResize(T item)&#123;    int size = _size;    EnsureCapacity(size + 1);    _size = size + 1;    _items[size] = item;&#125;//扩容private void EnsureCapacity(int min)&#123;    if (_items.Length &lt; min)//如果旧数组长度小于需要扩容的最小长度    &#123;        int newCapacity = _items.Length == 0 ? DefaultCapacity : _items.Length * 2;//若旧数组不存在元素，则分配初始长度;否则2倍扩容        // Allow the list to grow to maximum possible capacity (~2G elements) before encountering overflow.        // Note that this check works even when _items.Length overflowed thanks to the (uint) cast        if ((uint)newCapacity &gt; Array.MaxArrayLength)            newCapacity = Array.MaxArrayLength;        if (newCapacity &lt; min)             newCapacity = min;        Capacity = newCapacity; //重新设置Cpacity属性的值进行空间分配    &#125;&#125;//单个插入public void Insert(int index, T item)&#123;    // Note that insertions at the end are legal.    if ((uint)index &gt; (uint)_size)    &#123;        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.index, ExceptionResource.ArgumentOutOfRange_ListInsert);    &#125;    if (_size == _items.Length) //如果当前数组已满        EnsureCapacity(_size + 1);//扩容    if (index &lt; _size)    &#123;        Array.Copy(_items, index, _items, index + 1, _size - index);//拷贝插入位置和之后的元素，从插入位置后一位开始覆盖    &#125;    _items[index] = item;//用需要插入的元素覆盖原插入位置的元素    _size++;    _version++;&#125;void IList.Insert(int index, object? item)&#123;    ThrowHelper.IfNullAndNullsAreIllegalThenThrow&lt;T&gt;(item, ExceptionArgument.item);    try    &#123;        Insert(index, (T)item!);    &#125;    catch (InvalidCastException)    &#123;        ThrowHelper.ThrowWrongValueTypeArgumentException(item, typeof(T));    &#125;&#125;//是否包含某元素public bool Contains(T item)&#123;    // PERF: IndexOf calls Array.IndexOf, which internally    // calls EqualityComparer&lt;T&gt;.Default.IndexOf, which    // is specialized for different types. This    // boosts performance since instead of making a    // virtual method call each iteration of the loop,    // via EqualityComparer&lt;T&gt;.Default.Equals, we    // only make one virtual call to EqualityComparer.IndexOf.    return _size != 0 &amp;&amp; IndexOf(item) != -1;&#125;\n","dateCreated":"2021-10-24T22:19:46+08:00","dateModified":"2022-12-01T14:52:19+08:00","datePublished":"2021-10-24T22:19:46+08:00","description":"看一看System.Collections中常用的容器源码.","headline":"C#集合","image":["https://s3.uuu.ovh/imgs/2022/11/29/780799e41455a792.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/","keywords":"C#, Collection","thumbnailUrl":"https://s3.uuu.ovh/imgs/2022/11/29/780799e41455a792.jpg"}</script>
+    <meta name="description" content="看一看System.Collections中常用的容器源码.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="C#集合">
+<meta property="og:url" content="http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/index.html">
+<meta property="og:site_name" content="浅笑&#39;s blog">
+<meta property="og:description" content="看一看System.Collections中常用的容器源码.">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-10-24T14:19:46.000Z">
+<meta property="article:modified_time" content="2022-12-01T06:52:19.101Z">
+<meta property="article:author" content="浅笑">
+<meta property="article:tag" content="C#">
+<meta property="article:tag" content="Collection">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:creator" content="@awawg">
+    
+        <link rel="publisher" href="https://plus.google.com/awgwag"/>
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
+    
+    
+        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2022/11/29/780799e41455a792.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2022/11/29/780799e41455a792.jpg"/>
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-jza15cykdfobov3m5dorp42elw9ecgjwnulxpcov0xrp6xyxle3civay6e3n.min.css">
+
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            浅笑&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">浅笑</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>代码爱好者</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/csysm"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            C#集合
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2021-10-24T22:19:46+08:00">
+	
+		    10月 24, 2021
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/C/">C#</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>看一看System.Collections中常用的容器源码.</p>
+<span id="more"></span>
+
+<p><a target="_blank" rel="noopener" href="https://github.com/dotnet/corefx/tree/v3.1.9/src/Common/src/CoreLib/System/Collections/Generic">github源码</a></p>
+<p>有泛型实现时只看泛型实现。</p>
+<h2 id="1-List"><a href="#1-List" class="headerlink" title="1.List"></a>1.List<T></h2><p>属性：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Implements a variable-size List that uses an array of objects to store the</span></span><br><span class="line"><span class="comment">// elements. A List has a capacity, which is the allocated length</span></span><br><span class="line"><span class="comment">// of the internal array. As elements are added to a List, the capacity</span></span><br><span class="line"><span class="comment">// of the List is automatically increased as required by reallocating the</span></span><br><span class="line"><span class="comment">// internal array.</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">const</span> <span class="built_in">int</span> DefaultCapacity = <span class="number">4</span>; <span class="comment">//默认容量</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> T[] _items; <span class="comment">//泛型数组</span></span><br><span class="line"><span class="keyword">private</span> <span class="built_in">int</span> _size; <span class="comment">//元素个数</span></span><br><span class="line"><span class="keyword">private</span> <span class="built_in">int</span> _version; <span class="comment">//版本?</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">readonly</span> T[] s_emptyArray = <span class="keyword">new</span> T[<span class="number">0</span>]; <span class="comment">//空数组，当List中没有元素时使用</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="built_in">int</span> Capacity <span class="comment">//数组容量(只在变化时使用set访问器重新分配空间)</span></span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">get</span><span class="comment">//获取</span></span><br><span class="line">            &#123;</span><br><span class="line">                <span class="keyword">return</span> _items.Length;<span class="comment">//返回当前数组的长度</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">set</span><span class="comment">//设置</span></span><br><span class="line">            &#123;</span><br><span class="line">                <span class="keyword">if</span> (<span class="keyword">value</span> &lt; _size)<span class="comment">//如果传入值&lt;当前数组中的元素个数,抛出异常</span></span><br><span class="line">                &#123;</span><br><span class="line">                    ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.<span class="keyword">value</span>, ExceptionResource.ArgumentOutOfRange_SmallCapacity);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (<span class="keyword">value</span> != _items.Length)<span class="comment">//如果传入值!=当前数组的长度</span></span><br><span class="line">                &#123;</span><br><span class="line">                    <span class="keyword">if</span> (<span class="keyword">value</span> &gt; <span class="number">0</span>)<span class="comment">//如果传入值&gt;0</span></span><br><span class="line">                    &#123;</span><br><span class="line">                        T[] newItems = <span class="keyword">new</span> T[<span class="keyword">value</span>];<span class="comment">//构造一个长度为value的新数组</span></span><br><span class="line">                        <span class="keyword">if</span> (_size &gt; <span class="number">0</span>)<span class="comment">//如果当前数组中存在元素</span></span><br><span class="line">                        &#123;</span><br><span class="line">                            Array.Copy(_items, <span class="number">0</span>, newItems, <span class="number">0</span>, _size);<span class="comment">//将元素复制到新数组中</span></span><br><span class="line">                        &#125;</span><br><span class="line">                        _items = newItems;<span class="comment">//用新数组替换旧数组</span></span><br><span class="line">                    &#125;</span><br><span class="line">                    <span class="keyword">else</span><span class="comment">//如果传入值==0</span></span><br><span class="line">                    &#123;</span><br><span class="line">                        _items = s_emptyArray;<span class="comment">//用空数组替换旧数组</span></span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>构造方法：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">List</span>()<span class="comment">//未指定List长度时使用s_emptyArray</span></span></span><br><span class="line">&#123;</span><br><span class="line">    _items = s_emptyArray;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">List</span>(<span class="params"><span class="built_in">int</span> capacity</span>)<span class="comment">//指定List长度时</span></span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (capacity &lt; <span class="number">0</span>)</span><br><span class="line">        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.capacity, ExceptionResource.ArgumentOutOfRange_NeedNonNegNum);</span><br><span class="line">    <span class="keyword">if</span> (capacity == <span class="number">0</span>)</span><br><span class="line">        _items = s_emptyArray;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        _items = <span class="keyword">new</span> T[capacity];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">List</span>(<span class="params">IEnumerable&lt;T&gt; collection</span>)<span class="comment">//使用其他实现了IEnumerable&lt;T&gt;的集合构建List时</span></span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (collection == <span class="literal">null</span>)<span class="comment">//如果集合为空，抛异常</span></span><br><span class="line">        ThrowHelper.ThrowArgumentNullException(ExceptionArgument.collection);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (collection <span class="keyword">is</span> ICollection&lt;T&gt; c)<span class="comment">//如果该集合实现了ICollection&lt;T&gt;</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">int</span> count = c.Count;</span><br><span class="line">        <span class="keyword">if</span> (count == <span class="number">0</span>) <span class="comment">//collection中元素个数为0时</span></span><br><span class="line">        &#123;</span><br><span class="line">            _items = s_emptyArray;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> <span class="comment">//collection中元素个数不为0时</span></span><br><span class="line">        &#123;</span><br><span class="line">            _items = <span class="keyword">new</span> T[count]; <span class="comment">//_items=创建的新数组，数组长度为collection中元素个数</span></span><br><span class="line">            c.CopyTo(_items, <span class="number">0</span>); <span class="comment">//将collection中元素拷贝到_items</span></span><br><span class="line">            _size = count;<span class="comment">//设置当前元素个数为collection中元素个数</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span><span class="comment">//如果该集合没有实现ICollection&lt;T&gt;</span></span><br><span class="line">    &#123;</span><br><span class="line">        _size = <span class="number">0</span>;</span><br><span class="line">        _items = s_emptyArray;</span><br><span class="line">        <span class="keyword">using</span> (IEnumerator&lt;T&gt; en = collection!.GetEnumerator())<span class="comment">//遍历该集合并依次使用Add方法添加</span></span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">while</span> (en.MoveNext())</span><br><span class="line">            &#123;</span><br><span class="line">                Add(en.Current);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>方法：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//计数</span></span><br><span class="line"><span class="keyword">public</span> <span class="built_in">int</span> Count =&gt; _size; <span class="comment">//返回元素个数_size</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//单个添加</span></span><br><span class="line">[<span class="meta">MethodImpl(MethodImplOptions.AggressiveInlining)</span>]</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Add</span>(<span class="params">T item</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    _version++;</span><br><span class="line">    T[] array = _items;</span><br><span class="line">    <span class="built_in">int</span> size = _size;</span><br><span class="line">    <span class="keyword">if</span> ((<span class="built_in">uint</span>)size &lt; (<span class="built_in">uint</span>)array.Length)<span class="comment">//若当前元素个数小于数组长度</span></span><br><span class="line">    &#123;</span><br><span class="line">        _size = size + <span class="number">1</span>;<span class="comment">//当前元素个数+1</span></span><br><span class="line">        array[size] = item;<span class="comment">//将元素加入array[size]，这里size不是_size</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">    &#123;</span><br><span class="line">        AddWithResize(item);<span class="comment">//若当前元素个数等于数组长度，扩容后添加</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//AddWithResize()</span></span><br><span class="line">[<span class="meta">MethodImpl(MethodImplOptions.NoInlining)</span>]</span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">AddWithResize</span>(<span class="params">T item</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="built_in">int</span> size = _size;</span><br><span class="line">    EnsureCapacity(size + <span class="number">1</span>);</span><br><span class="line">    _size = size + <span class="number">1</span>;</span><br><span class="line">    _items[size] = item;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//扩容</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">EnsureCapacity</span>(<span class="params"><span class="built_in">int</span> min</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (_items.Length &lt; min)<span class="comment">//如果旧数组长度小于需要扩容的最小长度</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">int</span> newCapacity = _items.Length == <span class="number">0</span> ? DefaultCapacity : _items.Length * <span class="number">2</span>;<span class="comment">//若旧数组不存在元素，则分配初始长度;否则2倍扩容</span></span><br><span class="line">        <span class="comment">// Allow the list to grow to maximum possible capacity (~2G elements) before encountering overflow.</span></span><br><span class="line">        <span class="comment">// Note that this check works even when _items.Length overflowed thanks to the (uint) cast</span></span><br><span class="line">        <span class="keyword">if</span> ((<span class="built_in">uint</span>)newCapacity &gt; Array.MaxArrayLength)</span><br><span class="line">            newCapacity = Array.MaxArrayLength;</span><br><span class="line">        <span class="keyword">if</span> (newCapacity &lt; min) </span><br><span class="line">            newCapacity = min;</span><br><span class="line"></span><br><span class="line">        Capacity = newCapacity; <span class="comment">//重新设置Cpacity属性的值进行空间分配</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//单个插入</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">Insert</span>(<span class="params"><span class="built_in">int</span> index, T item</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">// Note that insertions at the end are legal.</span></span><br><span class="line">    <span class="keyword">if</span> ((<span class="built_in">uint</span>)index &gt; (<span class="built_in">uint</span>)_size)</span><br><span class="line">    &#123;</span><br><span class="line">        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.index, ExceptionResource.ArgumentOutOfRange_ListInsert);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (_size == _items.Length) <span class="comment">//如果当前数组已满</span></span><br><span class="line">        EnsureCapacity(_size + <span class="number">1</span>);<span class="comment">//扩容</span></span><br><span class="line">    <span class="keyword">if</span> (index &lt; _size)</span><br><span class="line">    &#123;</span><br><span class="line">        Array.Copy(_items, index, _items, index + <span class="number">1</span>, _size - index);<span class="comment">//拷贝插入位置和之后的元素，从插入位置后一位开始覆盖</span></span><br><span class="line">    &#125;</span><br><span class="line">    _items[index] = item;<span class="comment">//用需要插入的元素覆盖原插入位置的元素</span></span><br><span class="line">    _size++;</span><br><span class="line">    _version++;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> IList.Insert(<span class="built_in">int</span> index, <span class="built_in">object</span>? item)</span><br><span class="line">&#123;</span><br><span class="line">    ThrowHelper.IfNullAndNullsAreIllegalThenThrow&lt;T&gt;(item, ExceptionArgument.item);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span></span><br><span class="line">    &#123;</span><br><span class="line">        Insert(index, (T)item!);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> (InvalidCastException)</span><br><span class="line">    &#123;</span><br><span class="line">        ThrowHelper.ThrowWrongValueTypeArgumentException(item, <span class="keyword">typeof</span>(T));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//是否包含某元素</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="built_in">bool</span> <span class="title">Contains</span>(<span class="params">T item</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">// PERF: IndexOf calls Array.IndexOf, which internally</span></span><br><span class="line">    <span class="comment">// calls EqualityComparer&lt;T&gt;.Default.IndexOf, which</span></span><br><span class="line">    <span class="comment">// is specialized for different types. This</span></span><br><span class="line">    <span class="comment">// boosts performance since instead of making a</span></span><br><span class="line">    <span class="comment">// virtual method call each iteration of the loop,</span></span><br><span class="line">    <span class="comment">// via EqualityComparer&lt;T&gt;.Default.Equals, we</span></span><br><span class="line">    <span class="comment">// only make one virtual call to EqualityComparer.IndexOf.</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> _size != <span class="number">0</span> &amp;&amp; IndexOf(item) != <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/C/" rel="tag">C#</a> <a class="tag tag--primary tag--small t-none-link" href="/tags/Collection/" rel="tag">Collection</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    data-tooltip="EFCore使用教程"
+                    aria-label="上一篇: EFCore使用教程"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/10/17/Linux%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/"
+                    data-tooltip="Linux基本操作"
+                    aria-label="下一篇: Linux基本操作"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/&amp;title=C#集合"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2022 浅笑. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    data-tooltip="EFCore使用教程"
+                    aria-label="上一篇: EFCore使用教程"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/10/17/Linux%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C/"
+                    data-tooltip="Linux基本操作"
+                    aria-label="下一篇: Linux基本操作"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/&amp;title=C#集合"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/"
+                        aria-label="分享到 Weibo"
+                    >
+                        <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/10/24/C-%E9%9B%86%E5%90%88/&amp;title=C#集合"
+                        aria-label="分享到 QQ"
+                    >
+                        <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">浅笑</h4>
+        
+            <div id="about-card-bio"><p>代码爱好者</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                Wuhan
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/background.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-r1cy8sodc70sqdustknxebxnaszsgd8lhjzdxnsc5syn7siu0apth4cih47e.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

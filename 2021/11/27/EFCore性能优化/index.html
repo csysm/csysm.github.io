@@ -1,0 +1,663 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="浅笑&#39;s blog">
+    <title>EFCore性能优化 - 浅笑&#39;s blog</title>
+    <meta name="author" content="浅笑">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"默认配置下使用EFCore会有许多不易察觉性能问题，需要经过合适的配置和采用合适的使用方式后才能充分发挥其性能。\n\n\n1.数据库层面\n限制实体类string字段的长度使用CodeFirst方式迁移生成数据库时，如果不对实体类中的string类型的属性进行配置，则生成的数据库中该字段的长度会是nvarchar(max)对该种类型查询会花费较大开销。所以建议使用DataAnnotation或使用FluentApi进行配置，限制string类型字段的长度。\n主键类型自增型主键(int,long)与Guid类型主键的对比\n\n自增型主键：\n\n优点：由数据库自动生成，使用简单。查询时效率高\n缺点：高并发插入时性能低。合并数据库时可能会重复\n\n\nGuid\n\n优点：简单，高并发写入时效率高。永远不会重复\n缺点：占用空间大，查询时效率比int,long型主键效率低\n\n\n\n\n用Guid做主键时可以设置为索引，但不要设置为聚集索引，否则每次插入操作都要进行重排，导致插入效率极低\nMySql中主键强制使用聚集索引，所以不要在Mysql中使用Guid；SqlServer中主键可以设置为非聚集索引\n\n2.DbContext与DbContextPool\nDbContext使用DbContext时需要注意一下几个问题:\n\nDbContext实例不需要手动释放\n多个线程不能访问同一个dbcontext\n同一个跟踪实体不能被多个dbcontext操作\n\nDbContextPool频繁创建DbContext实例使用后再释放在高并发情况下可能会导致开销增大，在这种情况下微软官方文档推荐使用DbContextPool。通过DbContextPool创建的DbContext实例被释放后，EFCore会重置其状态并将其存储在内部池中，下一次请求相同的实例时，将返回该共用实例，而不是创建新的实例。\n123//依赖注入builder.Services.AddDbContextPool&lt;MyDbContext&gt;(    option =&gt; option.UseSqlServer(builder.Configuration.GetConnectionString(&quot;ConnectionString&quot;)),128);//手动设置poolSize为128\n\nAddDbContextPool()方法第二个参数poolSize为AddDbContextPool设置池保留的最大实例数， (EF Core 6.0 中默认为 1024) 在早期版本中默认为 128。 一旦超过 poolSize，就不会缓存新的上下文实例，EFCore 会退化到按需创建实例的非池行为。\n3.依赖注入服务的生命周期\n在ASP.Net中使用依赖注入注册服务时，有3种注册方式。这3种方式注册的服务被获取时，其实例的生命周期不同。\n\nAddTransient\n表示注册瞬态服务，每次或每个人获取被该方式注册的对象时，ServiceProvide都会新创建一个服务对象并传递，因此每次获取的服务对象都不同。\n\nAddScoped\n表示注册范围服务，获取被该方式注册的对象时，该服务对象在一定范围内是同一个对象，这个范围通常由程序员自己确定，从创建到被手动dispose之前都是同一个对象。但在Asp.Net中这个范围被框架自动确定为在一个请求中被创建的对象都是同一个对象。\n\nAddSingleton\n表示注册单例服务，不论何时或何人获取的对象都是同一个对象。\n\n\n使用时一般只使用AddScoped和AddSingleton方式注册服务(推荐使用AddScoped)。AddTransient注册的服务因为需要频繁创建和释放实例导致开销比较大所以不常使用。当创建的对象无状态时（对象中没有属性或字段）一般采用AddSingleton方式，节约资源提高性能。当创建的对象有状态时（对象中有属性或字段）一般采用AddScoped方式，因为Scoped下的代码一般是运行在同一个线程中的，不会发生多线程修改的问题。需要注意的是，在启用DbContextPool时无法使用AddSingleton方式注册服务。\n4.DbContext取消跟踪实体状态\nDbContext默认跟踪所有明确取出到内存的实体的状态，但代价是每次取出实体都会保存实体快照增大开销。对于只读查询建议取消跟踪实体状态。只需要在查询语句中加入AsNoTracking()方法\n1var students = context.Students.AsNoTracking().Where(s=&gt;s.Age&gt;18).ToList();//查询年龄大于18的学生(不跟踪状态)\n\n以上是局部查询中取消跟踪实体状态，也可以全局取消跟踪。重写DbContext类的OnConfiguring方法,使用该方式取消跟踪状态无法使用DbContextPool\n12345protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)&#123;    //取消跟踪实体状态\toptionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);&#125;\n\n不是所有实体都会被跟踪。只有明确取出到内存的实体才会被跟踪，当对延迟查询的对象调用终结方法或遍历时才会取出到内存。\n使用EFCore对实体进行Update或Delete时，在跟踪实体状态的情况下，默认步骤是先将实体取出到内存，然后再对实体进行删除。\n123var student=context.Students.Single(s=&gt;s.Id==1);//先将实体查询到内存context.Students.Remove(student);//删除实体context.SaveChanges();//保存到数据库\n\n以上方式在执行时实际上执行了两次SQL查询：\n12select * from Students where Id=1;delete from Students where Id=1;\n\n虽然这是EFCore推荐的删除实体方式，且并不会对性能有影响，但是可以对其进行优化只执行一次SQL查询：\n123var student=new Student&#123;Id=1&#125;;context.Entry(student).State=EntityState.Deleted;context.SaveChanges();\n\n以上方式在不跟踪实体状态的情况下通过操纵新建实体的实体状态同样可以实现删除实体的目的。而且只执行了一次SQL查询：\n1delete from Students where Id=1;\n\n同样可以采用这种方式进行实体的更新，只会执行一次SQL查询：\n123var student=new Student&#123;Id=1,Name=&quot;小王&quot;,Age=18&#125;;//赋值将要更新的属性：Name,Agecontext.Entry(student).State=EntityState.Modified;context.SaveChanges();\n\n以这种方式更新或删除实体不需要先将数据取出到内存，减少了一次数据库访问，提升了性能。但是使用这种方式之前必须确定要更新&#x2F;删除的实体存在于数据库中\n5.从数据库返回尽量少的数据\n查询时应只取出那些需要用到的数据，而不是将不需要的字段或行也返回，甚至返回一整张表。\n\n可以适当多利用Where()过滤查询结果。（可以使用多个Where去拼接查询语句）\n使用Select()方法筛选出需要返回的字段。\n连接表查询时应该尽量不要连接超过三张表，防止笛卡儿积爆炸。\n最终确定取出查询结果时再调用终结方法。\n\n","dateCreated":"2021-11-27T16:32:33+08:00","dateModified":"2022-11-24T16:08:59+08:00","datePublished":"2021-11-27T16:32:33+08:00","description":"默认配置下使用EFCore会有许多不易察觉性能问题，需要经过合适的配置和采用合适的使用方式后才能充分发挥其性能。","headline":"EFCore性能优化","image":["https://s3.bmp.ovh/imgs/2022/11/17/68c4ba2d5c4ecbdf.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/","keywords":"EFCore","thumbnailUrl":"https://s3.bmp.ovh/imgs/2022/11/17/68c4ba2d5c4ecbdf.jpg"}</script>
+    <meta name="description" content="默认配置下使用EFCore会有许多不易察觉性能问题，需要经过合适的配置和采用合适的使用方式后才能充分发挥其性能。">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="EFCore性能优化">
+<meta property="og:url" content="http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/index.html">
+<meta property="og:site_name" content="浅笑&#39;s blog">
+<meta property="og:description" content="默认配置下使用EFCore会有许多不易察觉性能问题，需要经过合适的配置和采用合适的使用方式后才能充分发挥其性能。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-11-27T08:32:33.000Z">
+<meta property="article:modified_time" content="2022-11-24T08:08:59.829Z">
+<meta property="article:author" content="浅笑">
+<meta property="article:tag" content="EFCore">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:creator" content="@awawg">
+    
+        <link rel="publisher" href="https://plus.google.com/awgwag"/>
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
+    
+    
+        <meta property="og:image" content="https://s3.bmp.ovh/imgs/2022/11/17/68c4ba2d5c4ecbdf.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.bmp.ovh/imgs/2022/11/17/68c4ba2d5c4ecbdf.jpg"/>
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-jza15cykdfobov3m5dorp42elw9ecgjwnulxpcov0xrp6xyxle3civay6e3n.min.css">
+
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            浅笑&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">浅笑</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>代码爱好者</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/csysm"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            EFCore性能优化
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2021-11-27T16:32:33+08:00">
+	
+		    11月 27, 2021
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/EFCore/">EFCore</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>默认配置下使用EFCore会有许多不易察觉性能问题，需要经过合适的配置和采用合适的使用方式后才能充分发挥其性能。</p>
+<span id="more"></span>
+
+<h2 id="1-数据库层面"><a href="#1-数据库层面" class="headerlink" title="1.数据库层面"></a>1.数据库层面</h2><hr>
+<h3 id="限制实体类string字段的长度"><a href="#限制实体类string字段的长度" class="headerlink" title="限制实体类string字段的长度"></a>限制实体类string字段的长度</h3><p>使用CodeFirst方式迁移生成数据库时，如果不对实体类中的string类型的属性进行配置，则生成的数据库中该字段的长度会是<code>nvarchar(max)</code>对该种类型查询会花费较大开销。所以建议使用DataAnnotation或使用FluentApi进行配置，限制string类型字段的长度。</p>
+<h3 id="主键类型"><a href="#主键类型" class="headerlink" title="主键类型"></a>主键类型</h3><p>自增型主键(int,long)与Guid类型主键的对比</p>
+<ol>
+<li><p>自增型主键：</p>
+<blockquote>
+<p>优点：由数据库自动生成，使用简单。查询时效率高</p>
+<p>缺点：高并发插入时性能低。合并数据库时可能会重复</p>
+</blockquote>
+</li>
+<li><p>Guid</p>
+<blockquote>
+<p>优点：简单，高并发写入时效率高。永远不会重复</p>
+<p>缺点：占用空间大，查询时效率比int,long型主键效率低</p>
+</blockquote>
+</li>
+</ol>
+<ul>
+<li>用Guid做主键时可以设置为索引，但不要设置为聚集索引，否则每次插入操作都要进行重排，导致插入效率极低</li>
+<li>MySql中主键强制使用聚集索引，所以不要在Mysql中使用Guid；SqlServer中主键可以设置为非聚集索引</li>
+</ul>
+<h2 id="2-DbContext与DbContextPool"><a href="#2-DbContext与DbContextPool" class="headerlink" title="2.DbContext与DbContextPool"></a>2.DbContext与DbContextPool</h2><hr>
+<h3 id="DbContext"><a href="#DbContext" class="headerlink" title="DbContext"></a>DbContext</h3><p>使用DbContext时需要注意一下几个问题:</p>
+<ol>
+<li>DbContext实例不需要手动释放</li>
+<li>多个线程不能访问同一个dbcontext</li>
+<li>同一个跟踪实体不能被多个dbcontext操作</li>
+</ol>
+<h3 id="DbContextPool"><a href="#DbContextPool" class="headerlink" title="DbContextPool"></a>DbContextPool</h3><p>频繁创建DbContext实例使用后再释放在高并发情况下可能会导致开销增大，在这种情况下<a target="_blank" rel="noopener" href="https://learn.microsoft.com/zh-cn/ef/core/performance/advanced-performance-topics?tabs=with-di,with-constant#dbcontext-pooling">微软官方文档</a>推荐使用DbContextPool。通过DbContextPool创建的DbContext实例被释放后，EFCore会重置其状态并将其存储在内部池中，下一次请求相同的实例时，将返回该共用实例，而不是创建新的实例。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//依赖注入</span></span><br><span class="line">builder.Services.AddDbContextPool&lt;MyDbContext&gt;(</span><br><span class="line">    option =&gt; option.UseSqlServer(builder.Configuration.GetConnectionString(<span class="string">&quot;ConnectionString&quot;</span>)),<span class="number">128</span>);<span class="comment">//手动设置poolSize为128</span></span><br></pre></td></tr></table></figure>
+
+<p>AddDbContextPool<T>()方法第二个参数<code>poolSize</code>为<a target="_blank" rel="noopener" href="https://learn.microsoft.com/zh-cn/dotnet/api/microsoft.extensions.dependencyinjection.entityframeworkservicecollectionextensions.adddbcontextpool">AddDbContextPool</a>设置池保留的最大实例数， (EF Core 6.0 中默认为 1024) 在早期版本中默认为 128。 一旦超过 <code>poolSize</code>，就不会缓存新的上下文实例，EFCore 会退化到按需创建实例的非池行为。</p>
+<h2 id="3-依赖注入服务的生命周期"><a href="#3-依赖注入服务的生命周期" class="headerlink" title="3.依赖注入服务的生命周期"></a>3.依赖注入服务的生命周期</h2><hr>
+<p>在ASP.Net中使用依赖注入注册服务时，有3种注册方式。这3种方式注册的服务被获取时，其实例的生命周期不同。</p>
+<ol>
+<li><p>AddTransient</p>
+<p>表示注册瞬态服务，每次或每个人获取被该方式注册的对象时，ServiceProvide都会新创建一个服务对象并传递，因此每次获取的服务对象都不同。</p>
+</li>
+<li><p>AddScoped</p>
+<p>表示注册范围服务，获取被该方式注册的对象时，该服务对象在一定范围内是同一个对象，这个范围通常由程序员自己确定，从创建到被手动dispose之前都是同一个对象。<span class="highlight-text yellow">但在Asp.Net中这个范围被框架自动确定为在一个请求中被创建的对象都是同一个对象</span>。</p>
+</li>
+<li><p>AddSingleton</p>
+<p>表示注册单例服务，不论何时或何人获取的对象都是同一个对象。</p>
+</li>
+</ol>
+<p>使用时一般只使用AddScoped和AddSingleton方式注册服务(推荐使用AddScoped)。AddTransient注册的服务因为需要频繁创建和释放实例导致开销比较大所以不常使用。当创建的对象无状态时（对象中没有属性或字段）一般采用AddSingleton方式，节约资源提高性能。当创建的对象有状态时（对象中有属性或字段）一般采用AddScoped方式，因为Scoped下的代码一般是运行在同一个线程中的，不会发生多线程修改的问题。需要注意的是，<strong>在启用DbContextPool时无法使用AddSingleton方式注册服务</strong>。</p>
+<h2 id="4-DbContext取消跟踪实体状态"><a href="#4-DbContext取消跟踪实体状态" class="headerlink" title="4.DbContext取消跟踪实体状态"></a>4.DbContext取消跟踪实体状态</h2><hr>
+<p>DbContext默认跟踪所有<strong>明确取出到内存的实体</strong>的状态，但代价是每次取出实体都会保存实体快照增大开销。对于只读查询建议取消跟踪实体状态。只需要在查询语句中加入<code>AsNoTracking()</code>方法</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> students = context.Students.AsNoTracking().Where(s=&gt;s.Age&gt;<span class="number">18</span>).ToList();<span class="comment">//查询年龄大于18的学生(不跟踪状态)</span></span><br></pre></td></tr></table></figure>
+
+<p>以上是局部查询中取消跟踪实体状态，也可以全局取消跟踪。重写DbContext类的OnConfiguring方法,使用该方式取消跟踪状态无法使用DbContextPool</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">override</span> <span class="keyword">void</span> <span class="title">OnConfiguring</span>(<span class="params">DbContextOptionsBuilder optionsBuilder</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//取消跟踪实体状态</span></span><br><span class="line">	optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不是所有实体都会被跟踪。只有明确取出到内存的实体才会被跟踪，当对延迟查询的对象调用终结方法或遍历时才会取出到内存。</p>
+<p>使用EFCore对实体进行Update或Delete时，<strong>在跟踪实体状态的情况下</strong>，默认步骤是先将实体取出到内存，然后再对实体进行删除。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> student=context.Students.Single(s=&gt;s.Id==<span class="number">1</span>);<span class="comment">//先将实体查询到内存</span></span><br><span class="line">context.Students.Remove(student);<span class="comment">//删除实体</span></span><br><span class="line">context.SaveChanges();<span class="comment">//保存到数据库</span></span><br></pre></td></tr></table></figure>
+
+<p>以上方式在执行时实际上执行了两次SQL查询：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> Students <span class="keyword">where</span> Id=<span class="number">1</span>;</span><br><span class="line">delete <span class="keyword">from</span> Students <span class="keyword">where</span> Id=<span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>虽然这是EFCore推荐的删除实体方式，且并不会对性能有影响，但是可以对其进行优化只执行一次SQL查询：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> student=<span class="keyword">new</span> Student&#123;Id=<span class="number">1</span>&#125;;</span><br><span class="line">context.Entry(student).State=EntityState.Deleted;</span><br><span class="line">context.SaveChanges();</span><br></pre></td></tr></table></figure>
+
+<p>以上方式在<strong>不跟踪实体状态的情况</strong>下通过操纵新建实体的<a target="_blank" rel="noopener" href="https://learn.microsoft.com/zh-cn/ef/ef6/saving/change-tracking/entity-state">实体状态</a>同样可以实现删除实体的目的。而且只执行了一次SQL查询：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">delete from Students where Id=1;</span><br></pre></td></tr></table></figure>
+
+<p>同样可以采用这种方式进行实体的更新，只会执行一次SQL查询：</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> student=<span class="keyword">new</span> Student&#123;Id=<span class="number">1</span>,Name=<span class="string">&quot;小王&quot;</span>,Age=<span class="number">18</span>&#125;;<span class="comment">//赋值将要更新的属性：Name,Age</span></span><br><span class="line">context.Entry(student).State=EntityState.Modified;</span><br><span class="line">context.SaveChanges();</span><br></pre></td></tr></table></figure>
+
+<p>以这种方式更新或删除实体不需要先将数据取出到内存，减少了一次数据库访问，提升了性能。但是使用这种方式之前<strong>必须确定要更新&#x2F;删除的实体存在于数据库中</strong></p>
+<h2 id="5-从数据库返回尽量少的数据"><a href="#5-从数据库返回尽量少的数据" class="headerlink" title="5.从数据库返回尽量少的数据"></a>5.从数据库返回尽量少的数据</h2><hr>
+<p>查询时应只取出那些需要用到的数据，而不是将不需要的字段或行也返回，甚至返回一整张表。</p>
+<ol>
+<li>可以适当多利用Where()过滤查询结果。（可以使用多个Where去拼接查询语句）</li>
+<li>使用Select()方法筛选出需要返回的字段。</li>
+<li>连接表查询时应该尽量不要连接超过三张表，防止笛卡儿积爆炸。</li>
+<li>最终确定取出查询结果时再调用终结方法。</li>
+</ol>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/EFCore/" rel="tag">EFCore</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    data-tooltip="使用root用户登录Ubuntu"
+                    aria-label="上一篇: 使用root用户登录Ubuntu"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    data-tooltip="EFCore使用教程"
+                    aria-label="下一篇: EFCore使用教程"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/&amp;title=EFCore性能优化"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2022 浅笑. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    data-tooltip="使用root用户登录Ubuntu"
+                    aria-label="上一篇: 使用root用户登录Ubuntu"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/11/16/EFCore%E4%BD%BF%E7%94%A8%E6%95%99%E7%A8%8B/"
+                    data-tooltip="EFCore使用教程"
+                    aria-label="下一篇: EFCore使用教程"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/&amp;title=EFCore性能优化"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/"
+                        aria-label="分享到 Weibo"
+                    >
+                        <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/11/27/EFCore%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/&amp;title=EFCore性能优化"
+                        aria-label="分享到 QQ"
+                    >
+                        <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">浅笑</h4>
+        
+            <div id="about-card-bio"><p>代码爱好者</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                Wuhan
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/background.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-r1cy8sodc70sqdustknxebxnaszsgd8lhjzdxnsc5syn7siu0apth4cih47e.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>

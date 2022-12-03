@@ -1,0 +1,601 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="浅笑&#39;s blog">
+    <title>在WebApi中使用JWT - 浅笑&#39;s blog</title>
+    <meta name="author" content="浅笑">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"开发环境：.Net6\n\n\nJWT鉴权\n1.安装Microsoft.AspNetCore.Authentication.JwtBearer\n2.在Program.cs中注册鉴权服务\n123456789101112131415builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)            .AddJwtBearer(options =&gt;            &#123;              options.TokenValidationParameters = new TokenValidationParameters              &#123;                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(&quot;SDMC-CJAS1-SAD-DFSFA-SADHJVF-VF&quot;)),//密钥，必须与控制器中的密钥一致                ValidateIssuerSigningKey = true,//是否验证key                ValidateLifetime = true,//是否验证key是否过期                ValidateIssuer = false,//是否验证颁发者(一般为false)                ValidIssuer = &quot;http://localhost:6060&quot;,//一般不写                ValidateAudience = false,//是否验证受众(一般为false)                ValidAudience = &quot;http://localhost:5000&quot;,//一般不写                ClockSkew = TimeSpan.FromMinutes(60)              &#125;;            &#125;);\n\n123app.UseCors(&quot;any&quot;);//跨域app.UseAuthentication();//使用鉴权（必须放在使用授权之前否则无法鉴权）app.UseAuthorization();//使用授权\n\nJWT授权\n1.安装Nuget程序包 System.IdentityModel.Tokens.Jwt \n2.签发JWT返回给客户端\n1234567891011121314151617//以下代码放在登录验证成功后的逻辑中var claims = new Claim[]&#123;    new Claim(ClaimTypes.Name, &quot;张三&quot;)//之后在控制器的方法中通过 var name= this.User.Identity.Name;可以访问到张三&#125;;var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(&quot;SDMC-CJAS1-SAD-DFSFA-SADHJVF-VF&quot;));//密钥var token = new JwtSecurityToken(//issuer代表颁发Token的Web应用程序，audience是Token的受理者    issuer: &quot;http://localhost:6060&quot;,//这一行一般省略    audience: &quot;http://localhost:5000&quot;,//这一行一般省略    claims: claims,//将claims存储进token    notBefore: DateTime.Now,    expires: DateTime.Now.AddHours(1),//设置过期时间    signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));var jwtToken = new JwtSecurityTokenHandler().WriteToken(token);return jwtToken; //jwtToken是string类型\n\n3.获取从客户端接收到的JWT中的信息\n123var claim1=this.User.FindFirst(ClaimTypes.Name);var claim2=this.User.FindFirst(&quot;currentUser&quot;);var username=claim2.Value;\n\n验证\n1234567[Authorize]//特性可以加在控制器或接口方法上//若加在控制器上表示该控制器中所有方法都需要鉴权//若加在接口方法上表示该接口方法需要鉴权[Authorize(Role=&quot;customRole&quot;)]//该写法会鉴权并限制访问的角色[AllowAnonymous]//可以在加上[Authorize]的控制器中使用，让某些方法不需要鉴权也可访问\n\n在Swagger中启用JWT鉴权授权\n在Swagger中想要使用鉴权需要在builder.Services.AddSwaggerGen()注册服务中添加以下代码\n12345678910111213141516171819202122232425262728293031c =&gt;&#123;    c.SwaggerDoc(&quot;v1&quot;, new OpenApiInfo &#123; Title = &quot;WebApi&quot;, Version = &quot;v1&quot; &#125;);    //Swagger启用JWT鉴权    c.AddSecurityDefinition(&quot;Bearer&quot;, new OpenApiSecurityScheme                            &#123;                                In = ParameterLocation.Header,                                Type = SecuritySchemeType.ApiKey,                                Description = &quot;直接在下框中输入Bearer &#123;token&#125;（注意两者之间是一个空格）&quot;,                                Name = &quot;Authorization&quot;,                                BearerFormat = &quot;JWT&quot;,                                Scheme = &quot;Bearer&quot;                            &#125;);    c.AddSecurityRequirement(new OpenApiSecurityRequirement                             &#123;                                 &#123;                                     new OpenApiSecurityScheme                                     &#123;                                         Reference=new OpenApiReference                                         &#123;                                             Type=ReferenceType.SecurityScheme,                                             Id=&quot;Bearer&quot;                                         &#125;                                     &#125;,                                     new string[] &#123;&#125;                                 &#125;                             &#125;);&#125;\n","dateCreated":"2022-12-24T20:32:33+08:00","dateModified":"2022-11-24T16:09:59+08:00","datePublished":"2022-12-24T20:32:33+08:00","description":"开发环境：.Net6","headline":"在WebApi中使用JWT","image":["https://s3.bmp.ovh/imgs/2022/11/17/e89be9db13a0ad9e.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/","keywords":"ASP.Net WebApi, JWT","thumbnailUrl":"https://s3.bmp.ovh/imgs/2022/11/17/e89be9db13a0ad9e.jpg"}</script>
+    <meta name="description" content="开发环境：.Net6">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="在WebApi中使用JWT">
+<meta property="og:url" content="http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/index.html">
+<meta property="og:site_name" content="浅笑&#39;s blog">
+<meta property="og:description" content="开发环境：.Net6">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-12-24T12:32:33.000Z">
+<meta property="article:modified_time" content="2022-11-24T08:09:59.759Z">
+<meta property="article:author" content="浅笑">
+<meta property="article:tag" content="ASP.Net WebApi">
+<meta property="article:tag" content="JWT">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:creator" content="@awawg">
+    
+        <link rel="publisher" href="https://plus.google.com/awgwag"/>
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
+    
+    
+        <meta property="og:image" content="https://s3.bmp.ovh/imgs/2022/11/17/e89be9db13a0ad9e.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.bmp.ovh/imgs/2022/11/17/e89be9db13a0ad9e.jpg"/>
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-jza15cykdfobov3m5dorp42elw9ecgjwnulxpcov0xrp6xyxle3civay6e3n.min.css">
+
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            浅笑&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">浅笑</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>代码爱好者</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/csysm"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            在WebApi中使用JWT
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2022-12-24T20:32:33+08:00">
+	
+		    12月 24, 2022
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/ASP-Net/">ASP.Net</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>开发环境：.Net6</p>
+<span id="more"></span>
+
+<h3 id="JWT鉴权"><a href="#JWT鉴权" class="headerlink" title="JWT鉴权"></a>JWT鉴权</h3><hr>
+<p>1.安装Microsoft.AspNetCore.Authentication.JwtBearer</p>
+<p>2.在Program.cs中注册鉴权服务</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)</span><br><span class="line">            .AddJwtBearer(options =&gt;</span><br><span class="line">            &#123;</span><br><span class="line">              options.TokenValidationParameters = <span class="keyword">new</span> TokenValidationParameters</span><br><span class="line">              &#123;</span><br><span class="line">                IssuerSigningKey = <span class="keyword">new</span> SymmetricSecurityKey(Encoding.UTF8.GetBytes(<span class="string">&quot;SDMC-CJAS1-SAD-DFSFA-SADHJVF-VF&quot;</span>)),<span class="comment">//密钥，必须与控制器中的密钥一致</span></span><br><span class="line">                ValidateIssuerSigningKey = <span class="literal">true</span>,<span class="comment">//是否验证key</span></span><br><span class="line">                ValidateLifetime = <span class="literal">true</span>,<span class="comment">//是否验证key是否过期</span></span><br><span class="line">                ValidateIssuer = <span class="literal">false</span>,<span class="comment">//是否验证颁发者(一般为false)</span></span><br><span class="line">                ValidIssuer = <span class="string">&quot;http://localhost:6060&quot;</span>,<span class="comment">//一般不写</span></span><br><span class="line">                ValidateAudience = <span class="literal">false</span>,<span class="comment">//是否验证受众(一般为false)</span></span><br><span class="line">                ValidAudience = <span class="string">&quot;http://localhost:5000&quot;</span>,<span class="comment">//一般不写</span></span><br><span class="line">                ClockSkew = TimeSpan.FromMinutes(<span class="number">60</span>)</span><br><span class="line">              &#125;;</span><br><span class="line">            &#125;);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">app.UseCors(<span class="string">&quot;any&quot;</span>);<span class="comment">//跨域</span></span><br><span class="line">app.UseAuthentication();<span class="comment">//使用鉴权（必须放在使用授权之前否则无法鉴权）</span></span><br><span class="line">app.UseAuthorization();<span class="comment">//使用授权</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="JWT授权"><a href="#JWT授权" class="headerlink" title="JWT授权"></a>JWT授权</h3><hr>
+<p>1.安装Nuget程序包 System.IdentityModel.Tokens.Jwt </p>
+<p>2.签发JWT返回给客户端</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//以下代码放在登录验证成功后的逻辑中</span></span><br><span class="line"><span class="keyword">var</span> claims = <span class="keyword">new</span> Claim[]</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">new</span> Claim(ClaimTypes.Name, <span class="string">&quot;张三&quot;</span>)<span class="comment">//之后在控制器的方法中通过 var name= this.User.Identity.Name;可以访问到张三</span></span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">var</span> key = <span class="keyword">new</span> SymmetricSecurityKey(Encoding.UTF8.GetBytes(<span class="string">&quot;SDMC-CJAS1-SAD-DFSFA-SADHJVF-VF&quot;</span>));<span class="comment">//密钥</span></span><br><span class="line"><span class="keyword">var</span> token = <span class="keyword">new</span> JwtSecurityToken(</span><br><span class="line"><span class="comment">//issuer代表颁发Token的Web应用程序，audience是Token的受理者</span></span><br><span class="line">    issuer: <span class="string">&quot;http://localhost:6060&quot;</span>,<span class="comment">//这一行一般省略</span></span><br><span class="line">    audience: <span class="string">&quot;http://localhost:5000&quot;</span>,<span class="comment">//这一行一般省略</span></span><br><span class="line">    claims: claims,<span class="comment">//将claims存储进token</span></span><br><span class="line">    notBefore: DateTime.Now,</span><br><span class="line">    expires: DateTime.Now.AddHours(<span class="number">1</span>),<span class="comment">//设置过期时间</span></span><br><span class="line">    signingCredentials: <span class="keyword">new</span> SigningCredentials(key, SecurityAlgorithms.HmacSha256)</span><br><span class="line">);</span><br><span class="line"><span class="keyword">var</span> jwtToken = <span class="keyword">new</span> JwtSecurityTokenHandler().WriteToken(token);</span><br><span class="line"><span class="keyword">return</span> jwtToken; <span class="comment">//jwtToken是string类型</span></span><br></pre></td></tr></table></figure>
+
+<p>3.获取从客户端接收到的JWT中的信息</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> claim1=<span class="keyword">this</span>.User.FindFirst(ClaimTypes.Name);</span><br><span class="line"><span class="keyword">var</span> claim2=<span class="keyword">this</span>.User.FindFirst(<span class="string">&quot;currentUser&quot;</span>);</span><br><span class="line"><span class="keyword">var</span> username=claim2.Value;</span><br></pre></td></tr></table></figure>
+
+<h3 id="验证"><a href="#验证" class="headerlink" title="验证"></a>验证</h3><hr>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[<span class="meta">Authorize</span>]<span class="comment">//特性可以加在控制器或接口方法上</span></span><br><span class="line"><span class="comment">//若加在控制器上表示该控制器中所有方法都需要鉴权</span></span><br><span class="line"><span class="comment">//若加在接口方法上表示该接口方法需要鉴权</span></span><br><span class="line"></span><br><span class="line">[<span class="meta">Authorize(Role=<span class="string">&quot;customRole&quot;</span>)</span>]<span class="comment">//该写法会鉴权并限制访问的角色</span></span><br><span class="line"></span><br><span class="line">[<span class="meta">AllowAnonymous</span>]<span class="comment">//可以在加上[Authorize]的控制器中使用，让某些方法不需要鉴权也可访问</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="在Swagger中启用JWT鉴权授权"><a href="#在Swagger中启用JWT鉴权授权" class="headerlink" title="在Swagger中启用JWT鉴权授权"></a>在Swagger中启用JWT鉴权授权</h3><hr>
+<p>在Swagger中想要使用鉴权需要在builder.Services.AddSwaggerGen()注册服务中添加以下代码</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">c =&gt;</span><br><span class="line">&#123;</span><br><span class="line">    c.SwaggerDoc(<span class="string">&quot;v1&quot;</span>, <span class="keyword">new</span> OpenApiInfo &#123; Title = <span class="string">&quot;WebApi&quot;</span>, Version = <span class="string">&quot;v1&quot;</span> &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//Swagger启用JWT鉴权</span></span><br><span class="line"></span><br><span class="line">    c.AddSecurityDefinition(<span class="string">&quot;Bearer&quot;</span>, <span class="keyword">new</span> OpenApiSecurityScheme</span><br><span class="line">                            &#123;</span><br><span class="line">                                In = ParameterLocation.Header,</span><br><span class="line">                                Type = SecuritySchemeType.ApiKey,</span><br><span class="line">                                Description = <span class="string">&quot;直接在下框中输入Bearer &#123;token&#125;（注意两者之间是一个空格）&quot;</span>,</span><br><span class="line">                                Name = <span class="string">&quot;Authorization&quot;</span>,</span><br><span class="line">                                BearerFormat = <span class="string">&quot;JWT&quot;</span>,</span><br><span class="line">                                Scheme = <span class="string">&quot;Bearer&quot;</span></span><br><span class="line">                            &#125;);</span><br><span class="line">    c.AddSecurityRequirement(<span class="keyword">new</span> OpenApiSecurityRequirement</span><br><span class="line">                             &#123;</span><br><span class="line">                                 &#123;</span><br><span class="line">                                     <span class="keyword">new</span> OpenApiSecurityScheme</span><br><span class="line">                                     &#123;</span><br><span class="line">                                         Reference=<span class="keyword">new</span> OpenApiReference</span><br><span class="line">                                         &#123;</span><br><span class="line">                                             Type=ReferenceType.SecurityScheme,</span><br><span class="line">                                             Id=<span class="string">&quot;Bearer&quot;</span></span><br><span class="line">                                         &#125;</span><br><span class="line">                                     &#125;,</span><br><span class="line">                                     <span class="keyword">new</span> <span class="built_in">string</span>[] &#123;&#125;</span><br><span class="line">                                 &#125;</span><br><span class="line">                             &#125;);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/ASP-Net-WebApi/" rel="tag">ASP.Net WebApi</a> <a class="tag tag--primary tag--small t-none-link" href="/tags/JWT/" rel="tag">JWT</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/12/27/ASP.Net%E4%B8%AD%E7%9A%84%E7%BC%93%E5%AD%98/"
+                    data-tooltip="ASP.Net中的缓存"
+                    aria-label="下一篇: ASP.Net中的缓存"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/&amp;title=在WebApi中使用JWT"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2022 浅笑. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2021/12/27/ASP.Net%E4%B8%AD%E7%9A%84%E7%BC%93%E5%AD%98/"
+                    data-tooltip="ASP.Net中的缓存"
+                    aria-label="下一篇: ASP.Net中的缓存"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="Diesen Beitrag teilen"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                    title="分享到 Weibo"
+                    aria-label="分享到 Weibo"
+                >
+                    <i class="fab fa-weibo" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/&amp;title=在WebApi中使用JWT"
+                    title="分享到 QQ"
+                    aria-label="分享到 QQ"
+                >
+                    <i class="fab fa-qq" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="Nach oben">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/"
+                        aria-label="分享到 Weibo"
+                    >
+                        <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/24/%E5%9C%A8WebApi%E4%B8%AD%E4%BD%BF%E7%94%A8JWT/&amp;title=在WebApi中使用JWT"
+                        aria-label="分享到 QQ"
+                    >
+                        <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/author.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">浅笑</h4>
+        
+            <div id="about-card-bio"><p>代码爱好者</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                Wuhan
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/background.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-r1cy8sodc70sqdustknxebxnaszsgd8lhjzdxnsc5syn7siu0apth4cih47e.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
