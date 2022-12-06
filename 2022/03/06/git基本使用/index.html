@@ -6,23 +6,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="generator" content="浅笑&#39;s blog">
-    <title>使用root用户登录Ubuntu - 浅笑&#39;s blog</title>
+    <title>git基本使用 - 浅笑&#39;s blog</title>
     <meta name="author" content="浅笑">
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：\n\n\n1.使用 ubuntu 帐户登录轻量应用服务器。\n2.执行以下命令，设置 root 密码。\nsudo passwd root\n3.输入 root 的密码，按 Enter。\n4.重复输入 root 的密码，按 Enter。\n返回如下信息，即表示 root 密码设置成功。\npasswd: password updated successfully\n5.执行以下命令，打开 sshd_config 配置文件。\nsudo vim /etc/ssh/sshd_config\n6.按 i 切换至编辑模式，找到 #Authentication，将 PermitRootLogin 参数修改为 yes。如果\nPermitRootLogin 参数被注释，则去掉首行的注释符号（#）。\n7.找到 #Authentication，将 PasswordAuthentication 参数修改为 yes，若 sshd_config 配置文件中无此配置项，则添加 PasswordAuthentication yes 项即可。\n8.按 Esc，输入 :wq，保存文件并返回。\n9.执行以下命令，重启 ssh 服务。\nsudo service ssh restart\n10.使用以下信息登录 Ubuntu 轻量应用服务器：\n用户名：root登录密码：在 步骤2 中已设置的密码\n原文链接\n","dateCreated":"2021-12-22T12:59:25+08:00","dateModified":"2022-11-24T16:09:36+08:00","datePublished":"2021-12-22T12:59:25+08:00","description":"Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：","headline":"使用root用户登录Ubuntu","image":["https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/","keywords":"Ubuntu","thumbnailUrl":"https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"}</script>
-    <meta name="description" content="Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：">
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"git基本使用和推荐工作流\n\n\ngit项目创建\n进入一个空目录，git bash here，使用git clone [url]下载代码\n进入一个空目录，git  bash here，使用git init创建项目\n\n查看暂存区文件状态查看所有文件状态git status\n查看指定文件状态git status [fileName]\n添加文件到暂存区添加文件到暂存区git add [fileName]\n提交文件到本地仓库提交暂存区中的内容到本地仓库git commit -m &quot;message&quot;，参数-m代表提交信息\n使用.gitignore忽略文件1.在仓库中创建.gitignore文件，使用通配符配置忽略文件的类型\n2.对于已经进行过git add操作的目录，如果新添加了.gitignore文件，则在进行git commit时，.gitignore文件不不会生效。需要清除暂存区缓存后再提交\n12# 清除暂存区缓存git rm -r --cached ./\n\n提交文件到远程仓库git remote add origin [url]在本地建立和远程仓库的关联\ngit remote rm origin删除和远程仓库的关联\ngit push origin master提交到远程仓库的master分枝\ngit pull --rebase origin master将本地仓库和远程仓库合并\n生成公钥ssh-keygen -t rsa -f &quot;生成的文件名&quot; -b &quot;密钥长度,不写默认为2048&quot; -C &quot;注释,一般为用户名&quot;\n如果要为多个仓库配置不同密钥，生成多组密钥后需要修改~&#x2F;.ssh&#x2F;congif文件\n123456789# githubHost github.com  Preferredauthentications publickey  IdentityFile ~/.ssh/github# giteeHost gitee.comPreferredAuthentications publickeyIdentityFile ~/.ssh/gitee\n\n这里为 github.com 网站指定的私钥放在文件 ~&#x2F;.ssh&#x2F;github中，对应的公钥文件 ~&#x2F;.ssh&#x2F;github.pub 注册到github平台 ssh key列表中，gitee网站也是一样处理，就可以了。\n","dateCreated":"2022-03-06T12:36:23+08:00","dateModified":"2022-12-06T18:08:33+08:00","datePublished":"2022-03-06T12:36:23+08:00","description":"git基本使用和推荐工作流","headline":"git基本使用","image":["https://s3.uuu.ovh/imgs/2022/12/06/d37f35effb0aff83.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/","keywords":"Git","thumbnailUrl":"https://s3.uuu.ovh/imgs/2022/12/06/d37f35effb0aff83.jpg"}</script>
+    <meta name="description" content="git基本使用和推荐工作流">
 <meta property="og:type" content="blog">
-<meta property="og:title" content="使用root用户登录Ubuntu">
-<meta property="og:url" content="http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/index.html">
+<meta property="og:title" content="git基本使用">
+<meta property="og:url" content="http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/index.html">
 <meta property="og:site_name" content="浅笑&#39;s blog">
-<meta property="og:description" content="Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：">
+<meta property="og:description" content="git基本使用和推荐工作流">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2021-12-22T04:59:25.000Z">
-<meta property="article:modified_time" content="2022-11-24T08:09:36.689Z">
+<meta property="article:published_time" content="2022-03-06T04:36:23.000Z">
+<meta property="article:modified_time" content="2022-12-06T10:08:33.695Z">
 <meta property="article:author" content="浅笑">
-<meta property="article:tag" content="Ubuntu">
+<meta property="article:tag" content="Git">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:creator" content="@awawg">
     
@@ -35,8 +35,8 @@
         <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
     
     
-        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"/>
-        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"/>
+        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2022/12/06/d37f35effb0aff83.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2022/12/06/d37f35effb0aff83.jpg"/>
     
     
     
@@ -221,20 +221,20 @@
         <div class="post-header main-content-wrap text-left">
     
         <h1 class="post-title">
-            使用root用户登录Ubuntu
+            git基本使用
         </h1>
     
     
         <div class="post-meta">
-    <time datetime="2021-12-22T12:59:25+08:00">
+    <time datetime="2022-03-06T12:36:23+08:00">
 	
-		    12月 22, 2021
+		    3月 06, 2022
     	
     </time>
     
         <span>发布在 </span>
         
-    <a class="category-link" href="/categories/Linux/">Linux</a>
+    <a class="category-link" href="/categories/Git/">Git</a>
 
 
     
@@ -246,27 +246,30 @@
     
     <div class="post-content markdown">
         <div class="main-content-wrap">
-            <p>Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：</p>
+            <p>git基本使用和推荐工作流</p>
 <span id="more"></span>
 
-<p>1.使用 ubuntu 帐户登录轻量应用服务器。</p>
-<p>2.执行以下命令，设置 root 密码。</p>
-<p><code>sudo passwd root</code></p>
-<p>3.输入 root 的密码，按 Enter。</p>
-<p>4.重复输入 root 的密码，按 Enter。</p>
-<p>返回如下信息，即表示 root 密码设置成功。</p>
-<p><code>passwd: password updated successfully</code></p>
-<p>5.执行以下命令，打开 sshd_config 配置文件。</p>
-<p><code>sudo vim /etc/ssh/sshd_config</code></p>
-<p>6.按 i 切换至编辑模式，找到 #Authentication，将 PermitRootLogin 参数修改为 yes。如果</p>
-<p>PermitRootLogin 参数被注释，则去掉首行的注释符号（#）。</p>
-<p>7.找到 #Authentication，将 PasswordAuthentication 参数修改为 yes，若 sshd_config 配置文件中无此配置项，则添加 PasswordAuthentication yes 项即可。</p>
-<p>8.按 Esc，输入 :wq，保存文件并返回。</p>
-<p>9.执行以下命令，重启 ssh 服务。</p>
-<p><code>sudo service ssh restart</code></p>
-<p>10.使用以下信息登录 Ubuntu 轻量应用服务器：</p>
-<p>用户名：root<br>登录密码：在 步骤2 中已设置的密码</p>
-<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/thebestleo/article/details/123451471">原文链接</a></p>
+<h3 id="git项目创建"><a href="#git项目创建" class="headerlink" title="git项目创建"></a>git项目创建</h3><ol>
+<li>进入一个空目录，git bash here，使用<code>git clone [url]</code>下载代码</li>
+<li>进入一个空目录，git  bash here，使用<code>git init</code>创建项目</li>
+</ol>
+<h3 id="查看暂存区文件状态"><a href="#查看暂存区文件状态" class="headerlink" title="查看暂存区文件状态"></a>查看暂存区文件状态</h3><p>查看所有文件状态<code>git status</code></p>
+<p>查看指定文件状态<code>git status [fileName]</code></p>
+<h3 id="添加文件到暂存区"><a href="#添加文件到暂存区" class="headerlink" title="添加文件到暂存区"></a>添加文件到暂存区</h3><p>添加文件到暂存区<code>git add [fileName]</code></p>
+<h3 id="提交文件到本地仓库"><a href="#提交文件到本地仓库" class="headerlink" title="提交文件到本地仓库"></a>提交文件到本地仓库</h3><p>提交暂存区中的内容到本地仓库<code>git commit -m &quot;message&quot;</code>，参数<code>-m</code>代表提交信息</p>
+<h3 id="使用-gitignore忽略文件"><a href="#使用-gitignore忽略文件" class="headerlink" title="使用.gitignore忽略文件"></a>使用.gitignore忽略文件</h3><p>1.在仓库中创建<code>.gitignore</code>文件，使用通配符配置忽略文件的类型</p>
+<p>2.对于已经进行过git add操作的目录，如果新添加了.gitignore文件，则在进行git commit时，.gitignore文件不不会生效。需要清除暂存区缓存后再提交</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 清除暂存区缓存</span></span><br><span class="line">git <span class="built_in">rm</span> -r --cached ./</span><br></pre></td></tr></table></figure>
+
+<h3 id="提交文件到远程仓库"><a href="#提交文件到远程仓库" class="headerlink" title="提交文件到远程仓库"></a>提交文件到远程仓库</h3><p><code>git remote add origin [url]</code>在本地建立和远程仓库的关联</p>
+<p><code>git remote rm origin</code>删除和远程仓库的关联</p>
+<p><code>git push origin master</code>提交到远程仓库的master分枝</p>
+<p><code>git pull --rebase origin master</code>将本地仓库和远程仓库合并</p>
+<h3 id="生成公钥"><a href="#生成公钥" class="headerlink" title="生成公钥"></a>生成公钥</h3><p><code>ssh-keygen -t rsa -f &quot;生成的文件名&quot; -b &quot;密钥长度,不写默认为2048&quot; -C &quot;注释,一般为用户名&quot;</code></p>
+<p>如果要为多个仓库配置不同密钥，生成多组密钥后需要修改~&#x2F;.ssh&#x2F;congif文件</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># github</span></span><br><span class="line"><span class="string">Host</span> <span class="string">github.com</span></span><br><span class="line">  <span class="string">Preferredauthentications</span> <span class="string">publickey</span></span><br><span class="line">  <span class="string">IdentityFile</span> <span class="string">~/.ssh/github</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># gitee</span></span><br><span class="line"><span class="string">Host</span> <span class="string">gitee.com</span></span><br><span class="line"><span class="string">PreferredAuthentications</span> <span class="string">publickey</span></span><br><span class="line"><span class="string">IdentityFile</span> <span class="string">~/.ssh/gitee</span></span><br></pre></td></tr></table></figure>
+
+<p>这里为 github.com 网站指定的私钥放在文件 ~&#x2F;.ssh&#x2F;github中，对应的公钥文件 ~&#x2F;.ssh&#x2F;github.pub 注册到github平台 ssh key列表中，gitee网站也是一样处理，就可以了。</p>
 
             
 
@@ -278,7 +281,7 @@
             <div class="post-footer-tags">
                 <span class="text-color-light text-small">标签</span><br/>
                 
-    <a class="tag tag--primary tag--small t-none-link" href="/tags/Ubuntu/" rel="tag">Ubuntu</a>
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/Git/" rel="tag">Git</a>
 
             </div>
         
@@ -288,14 +291,11 @@
         <ul class="post-actions post-action-nav">
             <li class="post-action">
                 
-                    
-                <a
-                    class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/23/Ubuntu+Nginx%E9%83%A8%E7%BD%B2WebApi/"
-                    data-tooltip="Ubuntu+Nginx部署WebApi"
-                    aria-label="上一篇: Ubuntu+Nginx部署WebApi"
-                >
-                    
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
                         <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
                     </a>
@@ -305,9 +305,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/08/WebApi%E4%B8%AD%E5%AE%9E%E7%8E%B0%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0/"
-                    data-tooltip="WebApi中实现文件上传"
-                    aria-label="下一篇: WebApi中实现文件上传"
+                    href="/2021/12/27/ASP.Net%E4%B8%AD%E7%9A%84%E7%BC%93%E5%AD%98/"
+                    data-tooltip="ASP.Net中的缓存"
+                    aria-label="下一篇: ASP.Net中的缓存"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -332,7 +332,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -345,7 +345,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -358,7 +358,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/&amp;title=git基本使用"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -403,14 +403,11 @@
         <ul class="post-actions post-action-nav">
             <li class="post-action">
                 
-                    
-                <a
-                    class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/23/Ubuntu+Nginx%E9%83%A8%E7%BD%B2WebApi/"
-                    data-tooltip="Ubuntu+Nginx部署WebApi"
-                    aria-label="上一篇: Ubuntu+Nginx部署WebApi"
-                >
-                    
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
                         <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
                     </a>
@@ -420,9 +417,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/08/WebApi%E4%B8%AD%E5%AE%9E%E7%8E%B0%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0/"
-                    data-tooltip="WebApi中实现文件上传"
-                    aria-label="下一篇: WebApi中实现文件上传"
+                    href="/2021/12/27/ASP.Net%E4%B8%AD%E7%9A%84%E7%BC%93%E5%AD%98/"
+                    data-tooltip="ASP.Net中的缓存"
+                    aria-label="下一篇: ASP.Net中的缓存"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -447,7 +444,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -460,7 +457,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -473,7 +470,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/&amp;title=git基本使用"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -507,7 +504,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                         aria-label="分享到 Twitter"
                     >
                         <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
@@ -520,7 +517,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
                         aria-label="分享到 Weibo"
                     >
                         <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
@@ -533,7 +530,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/&amp;title=git基本使用"
                         aria-label="分享到 QQ"
                     >
                         <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
