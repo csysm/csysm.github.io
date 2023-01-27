@@ -6,24 +6,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="generator" content="浅笑&#39;s blog">
-    <title>使用root用户登录Ubuntu - 浅笑&#39;s blog</title>
+    <title>MailKit使用 - 浅笑&#39;s blog</title>
     <meta name="author" content="浅笑">
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：\n\n\n1.使用 ubuntu 帐户登录轻量应用服务器。\n2.执行以下命令，设置 root 密码。\nsudo passwd root\n3.输入 root 的密码，按 Enter。\n4.重复输入 root 的密码，按 Enter。\n返回如下信息，即表示 root 密码设置成功。\npasswd: password updated successfully\n5.执行以下命令，打开 sshd_config 配置文件。\nsudo vim /etc/ssh/sshd_config\n6.按 i 切换至编辑模式，找到 #Authentication，将 PermitRootLogin 参数修改为 yes。如果\nPermitRootLogin 参数被注释，则去掉首行的注释符号（#）。\n7.找到 #Authentication，将 PasswordAuthentication 参数修改为 yes，若 sshd_config 配置文件中无此配置项，则添加 PasswordAuthentication yes 项即可。\n8.按 Esc，输入 :wq，保存文件并返回。\n9.执行以下命令，重启 ssh 服务。\nsudo service ssh restart\n10.使用以下信息登录 Ubuntu 轻量应用服务器：\n用户名：root登录密码：在 步骤2 中已设置的密码\n原文链接\n","dateCreated":"2021-12-22T12:59:25+08:00","dateModified":"2022-11-24T16:09:36+08:00","datePublished":"2021-12-22T12:59:25+08:00","description":"Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：","headline":"使用root用户登录Ubuntu","image":["https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/","keywords":"Ubuntu","thumbnailUrl":"https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"}</script>
-    <meta name="description" content="Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：">
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"使用MailKit发送邮件。\n原理：　\n　　例如A使用163邮箱发送邮件给B(qq邮箱)。首先A会把邮件通过SMTP（Simple Mail Transfer Protocol）协议传输到163的Smtp服务器上，163的Smtp服务器会根据B的邮箱账号，把邮件通过Smtp协议发给QQ邮箱的Smtp服务器。QQ的Smtp服务器接收到邮件消息后会将之存储在QQ邮箱的邮件存储设备上。当B登陆QQ邮箱后，如果有新邮件，POP3服务器就会从QQ邮箱的邮件存储设备上读出邮件并通过POP3&#x2F;IMAP服务发送给邮件客户端的B。\n\n1.通过QQ邮箱发送邮件时，需要开启QQ邮箱的stmp服务，获取生成的授权码\n\n2.在.net项目中安装MailKit包\nMailKit是开源.net邮件工具包,github地址：https://github.com/jstedfast/MailKit\n\n3.编写发送邮件的工具类MailHelper\n1234567891011121314151617181920212223242526272829303132333435using MimeKit;using System.Collections.Generic;using System.IO;using System.Text;using System.Threading.Tasks;using System;using MailKit.Net.Smtp;using MailKit;namespace deployTest.Utility&#123;    public class Mailhelper    &#123;        public static void SendMail(string userMail,string userName,string activeCode)//收件方邮箱，收件方名称，激活码        &#123;            //编辑邮件信息            var message = new MimeMessage();            message.From.Add(new MailboxAddress(&quot;博客注册&quot;, &quot;5623465874@qq.com&quot;));//发件方            message.To.Add(new MailboxAddress(userName, userMail));//收件方            message.Subject = &quot;账号激活&quot;;//邮件标题            message.Body = new TextPart(&quot;plain&quot;)            &#123;                Text = @&quot;您已注册个人博客账号，请点击以下链接激活账号&quot;+ activeCode//邮件内容            &#125;;            using (var client = new SmtpClient())            &#123;                client.Connect(&quot;smtp.qq.com&quot;,465,true);//这里填写QQ邮箱stmp服务地址，端口465，是否开启SSL为true                // Note: only needed if the SMTP server requires authentication                client.Authenticate(&quot;5623465874@qq.com&quot;, &quot;ivavgepguigiu&quot;);//填写发件方的邮箱,获取的授权码                client.Send(message);                client.Disconnect(true);            &#125;        &#125;    &#125;&#125;\n\n4.在控制器中使用\n123456[HttpGet(&quot;SendMail&quot;)]public async Task&lt;IActionResult&gt; Get()&#123;      Mailhelper.SendMail(&quot;5623465874@qq.com&quot;,&quot;zxx&quot;,&quot;awfwafwafaw&quot;);      return Ok();&#125;\n\n\n\n​\t\n","dateCreated":"2022-03-28T00:32:33+08:00","dateModified":"2023-01-28T00:53:46+08:00","datePublished":"2022-03-28T00:32:33+08:00","description":"使用MailKit发送邮件。","headline":"MailKit使用","image":["https://s3.uuu.ovh/imgs/2023/01/28/44362e4817bfa25f.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/","keywords":"ASP.Net WebApi, MailKit","thumbnailUrl":"https://s3.uuu.ovh/imgs/2023/01/28/44362e4817bfa25f.jpg"}</script>
+    <meta name="description" content="使用MailKit发送邮件。">
 <meta property="og:type" content="blog">
-<meta property="og:title" content="使用root用户登录Ubuntu">
-<meta property="og:url" content="http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/index.html">
+<meta property="og:title" content="MailKit使用">
+<meta property="og:url" content="http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/index.html">
 <meta property="og:site_name" content="浅笑&#39;s blog">
-<meta property="og:description" content="Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：">
+<meta property="og:description" content="使用MailKit发送邮件。">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2021-12-22T04:59:25.000Z">
-<meta property="article:modified_time" content="2022-11-24T08:09:36.689Z">
+<meta property="og:image" content="https://s3.uuu.ovh/imgs/2023/01/28/a02c98d7bc7f2ae5.png">
+<meta property="og:image" content="https://s3.uuu.ovh/imgs/2023/01/28/2cc78ff7cdf9fe31.png">
+<meta property="article:published_time" content="2022-03-27T16:32:33.000Z">
+<meta property="article:modified_time" content="2023-01-27T16:53:46.960Z">
 <meta property="article:author" content="浅笑">
-<meta property="article:tag" content="Ubuntu">
+<meta property="article:tag" content="ASP.Net WebApi">
+<meta property="article:tag" content="MailKit">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://s3.uuu.ovh/imgs/2023/01/28/a02c98d7bc7f2ae5.png">
 <meta name="twitter:creator" content="@awawg">
     
         <link rel="publisher" href="https://plus.google.com/awgwag"/>
@@ -35,8 +39,8 @@
         <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
     
     
-        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"/>
-        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2022/11/22/c27b630da044d90a.jpg"/>
+        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2023/01/28/44362e4817bfa25f.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2023/01/28/44362e4817bfa25f.jpg"/>
     
     
     
@@ -221,20 +225,20 @@
         <div class="post-header main-content-wrap text-left">
     
         <h1 class="post-title">
-            使用root用户登录Ubuntu
+            MailKit使用
         </h1>
     
     
         <div class="post-meta">
-    <time datetime="2021-12-22T12:59:25+08:00">
+    <time datetime="2022-03-28T00:32:33+08:00">
 	
-		    12月 22, 2021
+		    3月 28, 2022
     	
     </time>
     
         <span>发布在 </span>
         
-    <a class="category-link" href="/categories/Linux/">Linux</a>
+    <a class="category-link" href="/categories/Tools/">Tools</a>
 
 
     
@@ -246,27 +250,24 @@
     
     <div class="post-content markdown">
         <div class="main-content-wrap">
-            <p>Ubuntu 系统的默认用户名是 ubuntu，并在安装过程中默认不设置 root 帐户和密码。如有需要，可在设置中开启允许 root 用户登录。具体操作步骤如下：</p>
-<span id="more"></span>
+            <p>使用MailKit发送邮件。<span id="more"></span></p>
+<p><strong>原理</strong>：　</p>
+<p>　　例如A使用163邮箱发送邮件给B(qq邮箱)。首先A会把邮件通过<a target="_blank" rel="noopener" href="https://so.csdn.net/so/search?q=SMTP&spm=1001.2101.3001.7020">SMTP</a>（Simple Mail Transfer Protocol）协议传输到163的Smtp服务器上，163的Smtp服务器会根据B的邮箱账号，把邮件通过Smtp协议发给QQ邮箱的Smtp服务器。QQ的Smtp服务器接收到邮件消息后会将之存储在QQ邮箱的邮件存储设备上。当B登陆QQ邮箱后，如果有新邮件，POP3服务器就会从QQ邮箱的邮件存储设备上读出邮件并通过POP3&#x2F;IMAP服务发送给邮件客户端的B。</p>
+<hr>
+<p>1.通过QQ邮箱发送邮件时，需要开启QQ邮箱的stmp服务，获取生成的授权码</p>
+<p><img src="https://s3.uuu.ovh/imgs/2023/01/28/a02c98d7bc7f2ae5.png"></p>
+<p>2.在.net项目中安装MailKit包</p>
+<p>MailKit是开源.net邮件工具包,github地址：<a target="_blank" rel="noopener" href="https://github.com/jstedfast/MailKit">https://github.com/jstedfast/MailKit</a></p>
+<p><img src="https://s3.uuu.ovh/imgs/2023/01/28/2cc78ff7cdf9fe31.png"></p>
+<p>3.编写发送邮件的工具类MailHelper</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> MimeKit;</span><br><span class="line"><span class="keyword">using</span> System.Collections.Generic;</span><br><span class="line"><span class="keyword">using</span> System.IO;</span><br><span class="line"><span class="keyword">using</span> System.Text;</span><br><span class="line"><span class="keyword">using</span> System.Threading.Tasks;</span><br><span class="line"><span class="keyword">using</span> System;</span><br><span class="line"><span class="keyword">using</span> MailKit.Net.Smtp;</span><br><span class="line"><span class="keyword">using</span> MailKit;</span><br><span class="line"><span class="keyword">namespace</span> <span class="title">deployTest.Utility</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">class</span> <span class="title">Mailhelper</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">SendMail</span>(<span class="params"><span class="built_in">string</span> userMail,<span class="built_in">string</span> userName,<span class="built_in">string</span> activeCode</span>)<span class="comment">//收件方邮箱，收件方名称，激活码</span></span></span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">//编辑邮件信息</span></span><br><span class="line">            <span class="keyword">var</span> message = <span class="keyword">new</span> MimeMessage();</span><br><span class="line">            message.From.Add(<span class="keyword">new</span> MailboxAddress(<span class="string">&quot;博客注册&quot;</span>, <span class="string">&quot;5623465874@qq.com&quot;</span>));<span class="comment">//发件方</span></span><br><span class="line">            message.To.Add(<span class="keyword">new</span> MailboxAddress(userName, userMail));<span class="comment">//收件方</span></span><br><span class="line">            message.Subject = <span class="string">&quot;账号激活&quot;</span>;<span class="comment">//邮件标题</span></span><br><span class="line">            message.Body = <span class="keyword">new</span> TextPart(<span class="string">&quot;plain&quot;</span>)</span><br><span class="line">            &#123;</span><br><span class="line">                Text = <span class="string">@&quot;您已注册个人博客账号，请点击以下链接激活账号&quot;</span>+ activeCode<span class="comment">//邮件内容</span></span><br><span class="line">            &#125;;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">using</span> (<span class="keyword">var</span> client = <span class="keyword">new</span> SmtpClient())</span><br><span class="line">            &#123;</span><br><span class="line">                client.Connect(<span class="string">&quot;smtp.qq.com&quot;</span>,<span class="number">465</span>,<span class="literal">true</span>);<span class="comment">//这里填写QQ邮箱stmp服务地址，端口465，是否开启SSL为true</span></span><br><span class="line">                <span class="comment">// Note: only needed if the SMTP server requires authentication</span></span><br><span class="line">                client.Authenticate(<span class="string">&quot;5623465874@qq.com&quot;</span>, <span class="string">&quot;ivavgepguigiu&quot;</span>);<span class="comment">//填写发件方的邮箱,获取的授权码</span></span><br><span class="line">                client.Send(message);</span><br><span class="line">                client.Disconnect(<span class="literal">true</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<p>1.使用 ubuntu 帐户登录轻量应用服务器。</p>
-<p>2.执行以下命令，设置 root 密码。</p>
-<p><code>sudo passwd root</code></p>
-<p>3.输入 root 的密码，按 Enter。</p>
-<p>4.重复输入 root 的密码，按 Enter。</p>
-<p>返回如下信息，即表示 root 密码设置成功。</p>
-<p><code>passwd: password updated successfully</code></p>
-<p>5.执行以下命令，打开 sshd_config 配置文件。</p>
-<p><code>sudo vim /etc/ssh/sshd_config</code></p>
-<p>6.按 i 切换至编辑模式，找到 #Authentication，将 PermitRootLogin 参数修改为 yes。如果</p>
-<p>PermitRootLogin 参数被注释，则去掉首行的注释符号（#）。</p>
-<p>7.找到 #Authentication，将 PasswordAuthentication 参数修改为 yes，若 sshd_config 配置文件中无此配置项，则添加 PasswordAuthentication yes 项即可。</p>
-<p>8.按 Esc，输入 :wq，保存文件并返回。</p>
-<p>9.执行以下命令，重启 ssh 服务。</p>
-<p><code>sudo service ssh restart</code></p>
-<p>10.使用以下信息登录 Ubuntu 轻量应用服务器：</p>
-<p>用户名：root<br>登录密码：在 步骤2 中已设置的密码</p>
-<p><a target="_blank" rel="noopener" href="https://blog.csdn.net/thebestleo/article/details/123451471">原文链接</a></p>
+<p>4.在控制器中使用</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[<span class="meta">HttpGet(<span class="string">&quot;SendMail&quot;</span>)</span>]</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">async</span> Task&lt;IActionResult&gt; <span class="title">Get</span>()</span></span><br><span class="line">&#123;</span><br><span class="line">      Mailhelper.SendMail(<span class="string">&quot;5623465874@qq.com&quot;</span>,<span class="string">&quot;zxx&quot;</span>,<span class="string">&quot;awfwafwafaw&quot;</span>);</span><br><span class="line">      <span class="keyword">return</span> Ok();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<p>​	</p>
 
             
 
@@ -278,7 +279,7 @@
             <div class="post-footer-tags">
                 <span class="text-color-light text-small">标签</span><br/>
                 
-    <a class="tag tag--primary tag--small t-none-link" href="/tags/Ubuntu/" rel="tag">Ubuntu</a>
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/ASP-Net-WebApi/" rel="tag">ASP.Net WebApi</a> <a class="tag tag--primary tag--small t-none-link" href="/tags/MailKit/" rel="tag">MailKit</a>
 
             </div>
         
@@ -288,14 +289,11 @@
         <ul class="post-actions post-action-nav">
             <li class="post-action">
                 
-                    
-                <a
-                    class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/23/Ubuntu+Nginx%E9%83%A8%E7%BD%B2WebApi/"
-                    data-tooltip="Ubuntu+Nginx部署WebApi"
-                    aria-label="上一篇: Ubuntu+Nginx部署WebApi"
-                >
-                    
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
                         <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
                     </a>
@@ -305,9 +303,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/08/WebApi%E4%B8%AD%E5%AE%9E%E7%8E%B0%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0/"
-                    data-tooltip="WebApi中实现文件上传"
-                    aria-label="下一篇: WebApi中实现文件上传"
+                    href="/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
+                    data-tooltip="git基本使用"
+                    aria-label="下一篇: git基本使用"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -332,7 +330,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -345,7 +343,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -358,7 +356,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/&amp;title=MailKit使用"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -403,14 +401,11 @@
         <ul class="post-actions post-action-nav">
             <li class="post-action">
                 
-                    
-                <a
-                    class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/23/Ubuntu+Nginx%E9%83%A8%E7%BD%B2WebApi/"
-                    data-tooltip="Ubuntu+Nginx部署WebApi"
-                    aria-label="上一篇: Ubuntu+Nginx部署WebApi"
-                >
-                    
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
                         <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
                     </a>
@@ -420,9 +415,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2021/12/08/WebApi%E4%B8%AD%E5%AE%9E%E7%8E%B0%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0/"
-                    data-tooltip="WebApi中实现文件上传"
-                    aria-label="下一篇: WebApi中实现文件上传"
+                    href="/2022/03/06/git%E5%9F%BA%E6%9C%AC%E4%BD%BF%E7%94%A8/"
+                    data-tooltip="git基本使用"
+                    aria-label="下一篇: git基本使用"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -447,7 +442,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -460,7 +455,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -473,7 +468,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/&amp;title=MailKit使用"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -507,7 +502,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="https://twitter.com/intent/tweet?text=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                         aria-label="分享到 Twitter"
                     >
                         <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
@@ -520,7 +515,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/"
                         aria-label="分享到 Weibo"
                     >
                         <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
@@ -533,7 +528,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2021/12/22/%E4%BD%BF%E7%94%A8root%E7%94%A8%E6%88%B7%E7%99%BB%E5%BD%95Ubuntu/&amp;title=使用root用户登录Ubuntu"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/03/28/%E5%8F%91%E9%80%81%E9%82%AE%E4%BB%B6/&amp;title=MailKit使用"
                         aria-label="分享到 QQ"
                     >
                         <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
