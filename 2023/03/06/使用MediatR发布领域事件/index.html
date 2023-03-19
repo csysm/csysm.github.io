@@ -6,23 +6,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="generator" content="浅笑&#39;s blog">
-    <title>使用xUnit进行单元测试 - 浅笑&#39;s blog</title>
+    <title>使用MediatR发布领域事件 - 浅笑&#39;s blog</title>
     <meta name="author" content="浅笑">
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"使用xUnit进行单元测试。文档地址\n1.新建测试项目，引入要测试的项目2.安装依赖1234xunit//若使用visual studio则要安装以下两项Microsoft.NET.Test.Sdkxunit.runner.visualstudio \n\n3.使用1234567891011121314151617181920//例子public class UnitTest1&#123;    [Fact]    public void PassingTest()    &#123;        Assert.Equal(4, Add(2, 2));    &#125;    [Fact]    public void FailingTest()    &#123;        Assert.Equal(5, Add(2, 2));    &#125;    int Add(int x, int y)    &#123;        return x + y;    &#125;&#125;\n\n","dateCreated":"2022-12-19T19:33:14+08:00","dateModified":"2023-02-19T20:56:03+08:00","datePublished":"2022-12-19T19:33:14+08:00","description":"使用xUnit进行单元测试。文档地址","headline":"使用xUnit进行单元测试","image":["https://s3.uuu.ovh/imgs/2023/02/19/4469e5b7355c879f.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/","keywords":"xUnit","thumbnailUrl":"https://s3.uuu.ovh/imgs/2023/02/19/4469e5b7355c879f.jpg"}</script>
-    <meta name="description" content="使用xUnit进行单元测试。文档地址">
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"浅笑","sameAs":[],"image":"author.jpg"},"articleBody":"MediatR\n使用MediatR实现领域事件\n\nNuget安装MediatR.Extensions.Microsoft.DependencyInjection\n\n在Program.cs中注册AddMediatR()\n1builder.Service.AddMediatR(Assembly.GetExecutingAssembly());//扫描当前程序集中继承INotification的类，若是分层项目需要指定其他程序集\n\n定义一个在消息的发布者和处理者之间进行数据传递的类，这个类需要实现INotification接口。推荐使用record类型，因为一般消息是只读的，不需要接收方处理\n1public record TestNotification(string Body):INotification;\n\n在消息的发布类中注入IMediator类型的服务，然后调用Publish方法来发布消息。Send()方法是用来发布一对一消息的，而Publish()方法是用来发布一对多消息的。\n1234...private readonly IMediator mediator;//依赖注入...mediator.Publish(new TestNotification(&quot;当前时间&quot;+DateTime.Now));\n\n消息的处理类要实现NotificationHandler接口，其中的泛型参数TNotification代表此消息处理者要处理的消息类型。\n123456789101112public class TestNotificationHandler:NotificationHandler&lt;TestNotification&gt;&#123;    protected override void Handler(PostNotification notification)    &#123;        Console.WriteLine(&quot;显示消息类容:&quot;+notification.Body);    &#125;        public async Task Handle(PostNotification notification,CancellationToken cancellationToken)    &#123;        Console.WriteLine(&quot;异步显示消息类容:&quot;+notification.Body);    &#125;&#125;\n\n","dateCreated":"2023-03-06T22:38:42+08:00","dateModified":"2023-03-19T22:33:47+08:00","datePublished":"2023-03-06T22:38:42+08:00","description":"MediatR","headline":"使用MediatR发布领域事件","image":["https://s3.uuu.ovh/imgs/2023/03/19/272d5bbc9666a4b1.jpg"],"mainEntityOfPage":{"@type":"WebPage","@id":"http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"},"publisher":{"@type":"Organization","name":"浅笑","sameAs":[],"image":"author.jpg","logo":{"@type":"ImageObject","url":"author.jpg"}},"url":"http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/","keywords":"MediatR","thumbnailUrl":"https://s3.uuu.ovh/imgs/2023/03/19/272d5bbc9666a4b1.jpg"}</script>
+    <meta name="description" content="MediatR">
 <meta property="og:type" content="blog">
-<meta property="og:title" content="使用xUnit进行单元测试">
-<meta property="og:url" content="http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/index.html">
+<meta property="og:title" content="使用MediatR发布领域事件">
+<meta property="og:url" content="http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/index.html">
 <meta property="og:site_name" content="浅笑&#39;s blog">
-<meta property="og:description" content="使用xUnit进行单元测试。文档地址">
+<meta property="og:description" content="MediatR">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2022-12-19T11:33:14.000Z">
-<meta property="article:modified_time" content="2023-02-19T12:56:03.503Z">
+<meta property="article:published_time" content="2023-03-06T14:38:42.000Z">
+<meta property="article:modified_time" content="2023-03-19T14:33:47.048Z">
 <meta property="article:author" content="浅笑">
-<meta property="article:tag" content="xUnit">
+<meta property="article:tag" content="MediatR">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:creator" content="@awawg">
     
@@ -35,8 +35,8 @@
         <meta property="og:image" content="http://example.com/assets/images/author.jpg"/>
     
     
-        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2023/02/19/4469e5b7355c879f.jpg"/>
-        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2023/02/19/4469e5b7355c879f.jpg"/>
+        <meta property="og:image" content="https://s3.uuu.ovh/imgs/2023/03/19/272d5bbc9666a4b1.jpg"/>
+        <meta class="swiftype" name="image" data-type="enum" content="https://s3.uuu.ovh/imgs/2023/03/19/272d5bbc9666a4b1.jpg"/>
     
     
     
@@ -221,20 +221,20 @@
         <div class="post-header main-content-wrap text-left">
     
         <h1 class="post-title">
-            使用xUnit进行单元测试
+            使用MediatR发布领域事件
         </h1>
     
     
         <div class="post-meta">
-    <time datetime="2022-12-19T19:33:14+08:00">
+    <time datetime="2023-03-06T22:38:42+08:00">
 	
-		    12月 19, 2022
+		    3月 06, 2023
     	
     </time>
     
         <span>发布在 </span>
         
-    <a class="category-link" href="/categories/UnitTest/">UnitTest</a>
+    <a class="category-link" href="/categories/NetCore/">.NetCore</a>
 
 
     
@@ -246,11 +246,23 @@
     
     <div class="post-content markdown">
         <div class="main-content-wrap">
-            <p>使用xUnit进行单元测试。<a target="_blank" rel="noopener" href="https://xunit.net/docs/getting-started/netcore/visual-studio">文档地址</a><span id="more"></span></p>
-<h2 id="1-新建测试项目，引入要测试的项目"><a href="#1-新建测试项目，引入要测试的项目" class="headerlink" title="1.新建测试项目，引入要测试的项目"></a>1.新建测试项目，引入要测试的项目</h2><h2 id="2-安装依赖"><a href="#2-安装依赖" class="headerlink" title="2.安装依赖"></a>2.安装依赖</h2><figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">xunit</span><br><span class="line"><span class="comment">//若使用visual studio则要安装以下两项</span></span><br><span class="line">Microsoft.NET.Test.Sdk</span><br><span class="line">xunit.runner.visualstudio </span><br></pre></td></tr></table></figure>
-
-<h2 id="3-使用"><a href="#3-使用" class="headerlink" title="3.使用"></a>3.使用</h2><figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//例子</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">UnitTest1</span></span><br><span class="line">&#123;</span><br><span class="line">    [<span class="meta">Fact</span>]</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">PassingTest</span>()</span></span><br><span class="line">    &#123;</span><br><span class="line">        Assert.Equal(<span class="number">4</span>, Add(<span class="number">2</span>, <span class="number">2</span>));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    [<span class="meta">Fact</span>]</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">FailingTest</span>()</span></span><br><span class="line">    &#123;</span><br><span class="line">        Assert.Equal(<span class="number">5</span>, Add(<span class="number">2</span>, <span class="number">2</span>));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="built_in">int</span> <span class="title">Add</span>(<span class="params"><span class="built_in">int</span> x, <span class="built_in">int</span> y</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">return</span> x + y;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
+            <p>MediatR<span id="more"></span></p>
+<h2 id="使用MediatR实现领域事件"><a href="#使用MediatR实现领域事件" class="headerlink" title="使用MediatR实现领域事件"></a>使用MediatR实现领域事件</h2><hr>
+<ol>
+<li><p>Nuget安装<code>MediatR.Extensions.Microsoft.DependencyInjection</code></p>
+</li>
+<li><p>在<code>Program.cs</code>中注册<code>AddMediatR()</code></p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">builder.Service.AddMediatR(Assembly.GetExecutingAssembly());<span class="comment">//扫描当前程序集中继承INotification的类，若是分层项目需要指定其他程序集</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>定义一个在消息的发布者和处理者之间进行数据传递的类，这个类需要实现INotification接口。推荐使用record类型，因为一般消息是只读的，不需要接收方处理</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title">TestNotification</span>(<span class="params"><span class="built_in">string</span> Body</span>):INotification</span>;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在消息的发布类中注入IMediator类型的服务，然后调用Publish方法来发布消息。Send()方法是用来发布一对一消息的，而Publish()方法是用来发布一对多消息的。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">readonly</span> IMediator mediator;<span class="comment">//依赖注入</span></span><br><span class="line">...</span><br><span class="line">mediator.Publish(<span class="keyword">new</span> TestNotification(<span class="string">&quot;当前时间&quot;</span>+DateTime.Now));</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>消息的处理类要实现NotificationHandler<TNotification>接口，其中的泛型参数TNotification代表此消息处理者要处理的消息类型。</p>
+<figure class="highlight c#"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title">TestNotificationHandler</span>:<span class="title">NotificationHandler</span>&lt;<span class="title">TestNotification</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">override</span> <span class="keyword">void</span> <span class="title">Handler</span>(<span class="params">PostNotification notification</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        Console.WriteLine(<span class="string">&quot;显示消息类容:&quot;</span>+notification.Body);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">async</span> Task <span class="title">Handle</span>(<span class="params">PostNotification notification,CancellationToken cancellationToken</span>)</span></span><br><span class="line">    &#123;</span><br><span class="line">        Console.WriteLine(<span class="string">&quot;异步显示消息类容:&quot;</span>+notification.Body);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
 
             
 
@@ -262,7 +274,7 @@
             <div class="post-footer-tags">
                 <span class="text-color-light text-small">标签</span><br/>
                 
-    <a class="tag tag--primary tag--small t-none-link" href="/tags/xUnit/" rel="tag">xUnit</a>
+    <a class="tag tag--primary tag--small t-none-link" href="/tags/MediatR/" rel="tag">MediatR</a>
 
             </div>
         
@@ -275,9 +287,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
-                    data-tooltip="使用MediatR发布领域事件"
-                    aria-label="上一篇: 使用MediatR发布领域事件"
+                    href="/2023/03/14/RabbitMQ%E4%BD%BF%E7%94%A8/"
+                    data-tooltip="RabbitMQ使用"
+                    aria-label="上一篇: RabbitMQ使用"
                 >
                     
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
@@ -289,9 +301,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2022/06/15/Nginx%E9%83%A8%E7%BD%B2%E5%89%8D%E5%90%8E%E7%AB%AF%E5%88%86%E7%A6%BB%E9%A1%B9%E7%9B%AE/"
-                    data-tooltip="Nginx部署前后端分离项目"
-                    aria-label="下一篇: Nginx部署前后端分离项目"
+                    href="/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    data-tooltip="使用xUnit进行单元测试"
+                    aria-label="下一篇: 使用xUnit进行单元测试"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -316,7 +328,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -329,7 +341,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -342,7 +354,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/&amp;title=使用xUnit进行单元测试"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/&amp;title=使用MediatR发布领域事件"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -390,9 +402,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
-                    data-tooltip="使用MediatR发布领域事件"
-                    aria-label="上一篇: 使用MediatR发布领域事件"
+                    href="/2023/03/14/RabbitMQ%E4%BD%BF%E7%94%A8/"
+                    data-tooltip="RabbitMQ使用"
+                    aria-label="上一篇: RabbitMQ使用"
                 >
                     
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
@@ -404,9 +416,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2022/06/15/Nginx%E9%83%A8%E7%BD%B2%E5%89%8D%E5%90%8E%E7%AB%AF%E5%88%86%E7%A6%BB%E9%A1%B9%E7%9B%AE/"
-                    data-tooltip="Nginx部署前后端分离项目"
-                    aria-label="下一篇: Nginx部署前后端分离项目"
+                    href="/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    data-tooltip="使用xUnit进行单元测试"
+                    aria-label="下一篇: 使用xUnit进行单元测试"
                 >
                     
                         <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
@@ -431,7 +443,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                     title="分享到 Twitter"
                     aria-label="分享到 Twitter"
                 >
@@ -444,7 +456,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                    target="new" href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                     title="分享到 Weibo"
                     aria-label="分享到 Weibo"
                 >
@@ -457,7 +469,7 @@
             <li class="post-action hide-xs">
                 <a
                     class="post-action-btn btn btn--default"
-                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/&amp;title=使用xUnit进行单元测试"
+                    target="new" href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/&amp;title=使用MediatR发布领域事件"
                     title="分享到 QQ"
                     aria-label="分享到 QQ"
                 >
@@ -491,7 +503,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="https://twitter.com/intent/tweet?text=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                        href="https://twitter.com/intent/tweet?text=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                         aria-label="分享到 Twitter"
                     >
                         <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
@@ -504,7 +516,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/"
+                        href="http://service.weibo.com/share/share.php?&amp;title=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/"
                         aria-label="分享到 Weibo"
                     >
                         <i class="fab fa-weibo" aria-hidden="true"></i><span>分享到 Weibo</span>
@@ -517,7 +529,7 @@
                     <a
                         class="share-option-btn"
                         target="new"
-                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2022/12/19/xUnit%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95/&amp;title=使用xUnit进行单元测试"
+                        href="http://connect.qq.com/widget/shareqq/index.html?url=http://example.com/2023/03/06/%E4%BD%BF%E7%94%A8MediatR%E5%8F%91%E5%B8%83%E9%A2%86%E5%9F%9F%E4%BA%8B%E4%BB%B6/&amp;title=使用MediatR发布领域事件"
                         aria-label="分享到 QQ"
                     >
                         <i class="fab fa-qq" aria-hidden="true"></i><span>分享到 QQ</span>
